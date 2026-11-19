@@ -37,6 +37,11 @@ const router = createRouter({
           meta: { title: '积分商城' },
         },
         {
+          path: 'orders',
+          component: () => import('@/views/OrdersView.vue'),
+          meta: { title: '订单管理' },
+        },
+        {
           path: 'weather',
           component: () => import('@/views/WeatherLogsView.vue'),
           meta: { title: '天气数据' },

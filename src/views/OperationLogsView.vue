@@ -33,6 +33,13 @@ const ACTION_MAP: Record<string, { text: string; type: 'success' | 'warning' | '
   'cache.delete': { text: '删除缓存', type: 'warning' },
   'cache.batch_delete': { text: '批量删除缓存', type: 'error' },
   'cache.rule.update': { text: '修改缓存规则', type: 'info' },
+  'order.close': { text: '关闭订单', type: 'warning' },
+  'order.ship': { text: '订单发货', type: 'info' },
+  'order.address': { text: '修改收货地址', type: 'info' },
+  'order.remark': { text: '订单备注 / 异常', type: 'warning' },
+  'order.refund': { text: '订单退款', type: 'error' },
+  'order.complete': { text: '订单完成', type: 'success' },
+  'order.delete': { text: '删除订单', type: 'error' },
 }
 
 const actionOptions = [
@@ -45,6 +52,13 @@ const actionOptions = [
   { label: '删除缓存', value: 'cache.delete' },
   { label: '批量删除缓存', value: 'cache.batch_delete' },
   { label: '修改缓存规则', value: 'cache.rule.update' },
+  { label: '关闭订单', value: 'order.close' },
+  { label: '订单发货', value: 'order.ship' },
+  { label: '修改收货地址', value: 'order.address' },
+  { label: '订单备注 / 异常', value: 'order.remark' },
+  { label: '订单退款', value: 'order.refund' },
+  { label: '订单完成', value: 'order.complete' },
+  { label: '删除订单', value: 'order.delete' },
 ]
 
 async function doExport() {

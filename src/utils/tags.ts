@@ -91,6 +91,46 @@ export function payTag(pay: string | null | undefined): TagStyle {
 /** 鱼种标签（钓点卡内使用） */
 export const fishTag = (): TagStyle => ({ text: '', ...T.info })
 
+/** 订单状态标签：覆盖待支付 → 待发货 → 已发货 → 已完成及退款 / 关闭分支 */
+export function orderStatusTag(s: string | null | undefined): TagStyle {
+  switch (s) {
+    case '待支付':
+      return { text: '待支付', ...T.warn }
+    case '待发货':
+      return { text: '待发货', ...T.warn }
+    case '已发货':
+      return { text: '已发货', ...T.info }
+    case '已完成':
+      return { text: '已完成', ...T.success }
+    case '已关闭':
+      return { text: '已关闭', ...T.mute }
+    case '退款中':
+      return { text: '退款中', ...T.accent }
+    case '部分退款':
+      return { text: '部分退款', ...T.gold }
+    case '已退款':
+      return { text: '已退款', ...T.danger }
+    default:
+      return { text: s || '—', ...T.mute }
+  }
+}
+
+/** 支付状态标签 */
+export function payStatusTag(s: string | null | undefined): TagStyle {
+  switch (s) {
+    case '已支付':
+      return { text: '已支付', ...T.success }
+    case '未支付':
+      return { text: '未支付', ...T.warn }
+    case '已退款':
+      return { text: '已退款', ...T.danger }
+    case '已关闭':
+      return { text: '已关闭', ...T.mute }
+    default:
+      return { text: s || '—', ...T.mute }
+  }
+}
+
 /** 金额格式化：¥39.90 -> ¥39.9，整数去小数 */
 export function money(n: number | string | null | undefined): string {
   const v = Number(n ?? 0) || 0

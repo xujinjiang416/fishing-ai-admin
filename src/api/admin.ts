@@ -165,6 +165,7 @@ export interface MembershipStats {
 
 /** 天气缓存条目（后台「系统设置 · 缓存管理」） */
 export interface CacheItem {
+  type: 'weather'
   id: number
   cacheKey: string
   region: string
@@ -181,9 +182,33 @@ export interface CacheItem {
   temp: number | null
 }
 
+/** 鱼情分析缓存条目 */
+export interface FishCacheItem {
+  type: 'fish'
+  id: number
+  cacheKey: string
+  region: string
+  day: string | null
+  params: Record<string, string>
+  source: string
+  createdAt: string | null
+  expireAt: string | null
+  lastHitAt: string | null
+  sizeBytes: number
+  sizeKb: number
+  hitCount: number
+  status: 'active' | 'expired'
+  score: number | null
+  verdict: string | null
+  level: string | null
+  aiGenerated: boolean
+}
+
 /** 缓存统计看板 */
 export interface CacheStats {
   totalCount: number
+  weatherCount: number
+  fishCount: number
   totalSizeBytes: number
   totalSizeKb: number
   todayHitRate: number
@@ -191,10 +216,103 @@ export interface CacheStats {
   trend: { days: string[]; hits: number[]; totals: number[] }
 }
 
-/** 缓存过期规则（城市等级 / 数据精度差异化 TTL） */
+/** 缓存有效期规则（天气 / 鱼情，单位秒，默认 3 小时） */
 export interface CacheRules {
-  cityLevels: Record<string, number>
-  precisions: Record<string, number>
+  weather: number
+  fish: number
+}
+
+/** 缓存列表查询参数 */
+export interface CacheQuery {
+  keyword?: string
+  status?: string
+  source?: string
+  startDate?: string
+  endDate?: string
+  page: number
+  pageSize: number
+}
+
+/** 订单（后台「运营管理 · 订单管理」） */
+export interface AdminOrder {
+  no: string
+  userId: number
+  uid: string
+  user: string
+  userAvatar: string
+  userPhone: string
+  goodsId: string
+  goods: string
+  goodsImg: string | null
+  qty: number
+  total: number
+  usePoints: number
+  amount: number
+  payMethod: string
+  payStatus: string
+  status: string
+  deliveryType: string
+  receiver: string
+  receiverPhone: string
+  address: string
+  logisticsCompany: string
+  logisticsNo: string
+  refundAmount: number
+  refundStatus: string
+  refundReason: string
+  abnormal: boolean
+  remark: string
+  createdAt: string
+  paidAt: string
+  shippedAt: string
+  completedAt: string
+  closedAt: string
+}
+
+export interface OrderLogItem {
+  action: string
+  operator: string
+  detail: string
+  createdAt: string
+}
+
+export interface AdminOrderDetail extends AdminOrder {
+  goodsDetail: {
+    id: string
+    name: string
+    cat: string
+    img: string | null
+    spec: string
+    price: number
+    qty: number
+    subtotal: number
+  }
+  userInfo: { uid: string; nickname: string; phone: string; city: string; isMember: boolean }
+  logs: OrderLogItem[]
+}
+
+/** 订单筛选条件（列表 / 导出共用） */
+export interface OrderQuery {
+  keyword?: string
+  userKeyword?: string
+  startDate?: string
+  endDate?: string
+  payMethod?: string
+  status?: string
+  deliveryType?: string
+  quick?: string
+  page?: number
+  pageSize?: number
+}
+
+/** 订单统计概览 */
+export interface OrderStats {
+  todayOrders: number
+  todayAmount: number
+  pendingCount: number
+  totalOrders: number
+  counts: { unpaid: number; unshipped: number; refunding: number; abnormal: number }
+  trend: { days: string[]; counts: number[]; amounts: number[] }
 }
 
 
@@ -273,15 +391,7 @@ export const api = {
   membershipStats: () => get<MembershipStats>('/admin/membership-stats'),
 
   // ---------- 系统设置 · 缓存管理 ----------
-  cacheList: (params: {
-    keyword?: string
-    status?: string
-    source?: string
-    startDate?: string
-    endDate?: string
-    page: number
-    pageSize: number
-  }) => get<Page<CacheItem>>('/admin/cache', params),
+  cacheList: (params: CacheQuery) => get<Page<CacheItem>>('/admin/cache', { ...params }),
   cacheDetail: (id: number) => get<{ cache: CacheItem; payload: Record<string, unknown> }>(`/admin/cache/${id}`),
   cacheStats: () => get<CacheStats>('/admin/cache/stats'),
   cacheRules: () => get<CacheRules>('/admin/cache/rules'),
@@ -290,4 +400,28 @@ export const api = {
   batchRefreshCache: (ids: number[]) => post<{ refreshed: number }>('/admin/cache/batch-refresh', { ids }),
   deleteCache: (id: number) => del<null>(`/admin/cache/${id}`),
   batchDeleteCache: (ids: number[]) => post<{ deleted: number }>('/admin/cache/batch-delete', { ids }),
+  fishCacheList: (params: CacheQuery) => get<Page<FishCacheItem>>('/admin/cache/fish', { ...params }),
+  fishCacheDetail: (id: number) =>
+    get<{ cache: FishCacheItem; payload: Record<string, unknown>; params: Record<string, string> }>(
+      `/admin/cache/fish/${id}`,
+    ),
+  deleteFishCache: (id: number) => del<null>(`/admin/cache/fish/${id}`),
+  batchDeleteFishCache: (ids: number[]) =>
+    post<{ deleted: number }>('/admin/cache/fish/batch-delete', { ids }),
+
+  // ---------- 运营管理 · 订单管理 ----------
+  orders: (params: OrderQuery) => get<Page<AdminOrder>>('/admin/orders', { ...params }),
+  orderStats: () => get<OrderStats>('/admin/orders/stats'),
+  orderDetail: (no: string) => get<AdminOrderDetail>(`/admin/orders/${encodeURIComponent(no)}`),
+  closeOrder: (no: string) => post<AdminOrder>(`/admin/orders/${encodeURIComponent(no)}/close`),
+  shipOrder: (no: string, data: { logisticsCompany: string; logisticsNo: string; deliveryType?: string }) =>
+    post<AdminOrder>(`/admin/orders/${encodeURIComponent(no)}/ship`, data),
+  updateOrderAddress: (no: string, data: { receiver: string; receiverPhone: string; address: string }) =>
+    put<AdminOrder>(`/admin/orders/${encodeURIComponent(no)}/address`, data),
+  remarkOrder: (no: string, data: { remark?: string; abnormal?: boolean }) =>
+    post<AdminOrder>(`/admin/orders/${encodeURIComponent(no)}/remark`, data),
+  refundOrder: (no: string, data: { amount: number; reason?: string; approve: boolean }) =>
+    post<AdminOrder>(`/admin/orders/${encodeURIComponent(no)}/refund`, data),
+  completeOrder: (no: string) => post<AdminOrder>(`/admin/orders/${encodeURIComponent(no)}/complete`),
+  deleteOrder: (no: string) => del<null>(`/admin/orders/${encodeURIComponent(no)}`),
 }
