@@ -1,0 +1,994 @@
+/* ---------- 设计 token（源自原型 design-contract.md） ---------- */
+:root {
+  --c-primary: #0f8b8d;
+  --c-primary-d: #0a6a6c;
+  --c-primary-l: #e5f4f4;
+  --c-accent: #ff7a3d;
+  --c-accent-d: #e8662b;
+  --c-accent-l: #ffefe6;
+  --c-gold: #c08a2e;
+  --c-gold-l: #fbf3e2;
+  --c-sidebar: #0b2426;
+  --c-sidebar-2: #0e2f31;
+  --c-bg: #f4f7f6;
+  --c-surface: #ffffff;
+  --c-surface-2: #f8fafa;
+  --c-line: #e3eae8;
+  --c-line-soft: #eff3f2;
+  --c-ink: #12211f;
+  --c-ink-2: #3d4f4d;
+  --c-ink-3: #6e807e;
+  --c-ink-4: #9aa9a7;
+  --c-success: #2e9e6b;
+  --c-warn: #d9971a;
+  --c-danger: #e5484d;
+  --c-info: #1b7fd4;
+
+  --grad-side: linear-gradient(180deg, #0e2f31 0%, #0b2426 100%);
+  --grad-water: linear-gradient(160deg, #128e90 0%, #0b5f72 100%);
+  --grad-dawn: linear-gradient(135deg, #ffb06b 0%, #ff7a3d 100%);
+  --grad-gold: linear-gradient(135deg, #e3b25e 0%, #c08a2e 100%);
+
+  --font-display: 'Noto Serif SC', 'Songti SC', 'STSong', Georgia, serif;
+  --font-body: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC',
+    system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'JetBrains Mono', 'Menlo', Consolas, monospace;
+
+  --shadow-sm: 0 1px 2px rgba(18, 33, 31, 0.05), 0 1px 3px rgba(18, 33, 31, 0.04);
+  --shadow-md: 0 6px 18px rgba(11, 95, 114, 0.08);
+  --shadow-lg: 0 16px 40px rgba(11, 95, 114, 0.14);
+
+  --sidebar-w: 236px;
+  --topbar-h: 60px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--c-ink);
+  background-color: var(--c-bg);
+  background-image:
+    radial-gradient(900px 420px at 12% -8%, rgba(15, 139, 141, 0.07), transparent 60%),
+    radial-gradient(760px 360px at 92% 108%, rgba(255, 122, 61, 0.05), transparent 60%);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 通用页面结构 ---------- */
+.page {
+  padding: 24px 28px 40px;
+  /* 随窗口自适应：超宽屏下限制最大宽度并居中，避免表格被拉散 */
+  width: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.pagehead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.pagehead__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--c-ink);
+  letter-spacing: 0.2px;
+}
+
+.pagehead__desc {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--c-ink-3);
+}
+
+.pagehead__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap; /* 窄窗口下筛选条件自动换行，避免溢出 */
+  gap: 10px;
+  row-gap: 10px;
+  margin-bottom: 14px;
+}
+
+.toolbar__spacer {
+  flex: 1;
+}
+
+.card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.card--pad {
+  padding: 18px 20px;
+}
+
+/* ---------- KPI ---------- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.kpi {
+  position: relative;
+  padding: 16px 18px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.kpi::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--grad-water);
+}
+
+.kpi--accent::before {
+  background: var(--grad-dawn);
+}
+
+.kpi--gold::before {
+  background: var(--grad-gold);
+}
+
+.kpi--success::before {
+  background: var(--c-success);
+}
+
+.kpi__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--c-ink-3);
+}
+
+.kpi__val {
+  margin: 10px 0 2px;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--c-ink);
+  letter-spacing: 0.5px;
+}
+
+.kpi__ft {
+  font-size: 12px;
+  color: var(--c-ink-4);
+}
+
+.kpi__ft b {
+  color: var(--c-success);
+  font-weight: 600;
+}
+
+.kpi__ft b.is-down {
+  color: var(--c-ink-4);
+}
+
+/* ---------- 迷你柱状图 ---------- */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.card__hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 0;
+}
+
+.card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--c-ink);
+}
+
+.card__sub {
+  font-size: 12px;
+  color: var(--c-ink-4);
+}
+
+/* ---------- 空态 / 骨架 ---------- */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 0;
+  color: var(--c-ink-4);
+}
+
+/* ---------- 侧边栏 ---------- */
+.admin-shell {
+  display: flex;
+  min-height: 100%;
+}
+
+.admin-sider {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--sidebar-w);
+  display: flex;
+  flex-direction: column;
+  background: var(--grad-side);
+  z-index: 20;
+}
+
+.admin-sider__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 22px 18px;
+}
+
+.admin-sider__logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--grad-water);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+
+.admin-sider__brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-sider__brand-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 1px;
+}
+
+.admin-sider__brand-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 1.5px;
+}
+
+.admin-sider__label {
+  padding: 10px 24px 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 2px;
+}
+
+.admin-sider__list {
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-sider__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.72);
+  text-decoration: none;
+  font-size: 14px;
+  transition: all 0.14s ease-out;
+}
+
+.admin-sider__item:hover {
+  color: #fff;
+  background: rgba(255, 255,255, 0.08);
+}
+
+.admin-sider__item.is-active {
+  color: #fff;
+  background: var(--grad-water);
+  box-shadow: 0 6px 16px rgba(11, 95, 114, 0.35);
+}
+
+.admin-sider__foot {
+  margin-top: auto;
+  padding: 14px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-sider__foot-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-sider__foot-name {
+  font-size: 13px;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-sider__foot-role {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.admin-sider__logout {
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: all 0.14s ease-out;
+}
+
+.admin-sider__logout:hover {
+  color: #fff;
+  background: rgba(229, 72, 77, 0.25);
+}
+
+/* ---------- 顶栏 ---------- */
+.admin-main {
+  flex: 1;
+  margin-left: var(--sidebar-w);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-top {
+  position: sticky;
+  top: 0;
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 28px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--c-line-soft);
+  z-index: 10;
+}
+
+.admin-top__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--c-ink);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.admin-top__search {
+  flex: 0 1 280px;
+  min-width: 120px;
+}
+
+.admin-top__ico {
+  position: relative;
+  color: var(--c-ink-3);
+  padding: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.admin-top__ico:hover {
+  background: var(--c-surface-2);
+  color: var(--c-ink);
+}
+
+.dot-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c-accent);
+  border: 1.5px solid #fff;
+}
+
+.admin-top__split {
+  width: 1px;
+  height: 22px;
+  background: var(--c-line);
+  flex-shrink: 0;
+}
+
+.admin-top__me {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--c-ink-2);
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ---------- 头像 ---------- */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 13px;
+  flex-shrink: 0;
+  background: var(--grad-water);
+}
+
+.avatar--sm {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.avatar--md {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+}
+
+.avatar--lg {
+  width: 48px;
+  height: 48px;
+  font-size: 18px;
+}
+
+.avatar--accent {
+  background: var(--grad-dawn);
+}
+
+.avatar--gold {
+  background: var(--grad-gold);
+}
+
+/* ---------- 表格微调 ---------- */
+/* 卡片内表格：上/左/右留出内边距，避免表格与卡片边缘贴边（底部由分页区自带间距） */
+.card > .n-data-table {
+  padding: 16px 18px 0;
+}
+
+.card .n-data-table__pagination {
+  padding: 10px 2px 14px;
+}
+
+.td-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.td-t {
+  font-weight: 500;
+  color: var(--c-ink);
+}
+
+.td-s {
+  font-size: 12px;
+  color: var(--c-ink-4);
+  margin-top: 2px;
+}
+
+.td-sub {
+  display: flex;
+  flex-direction: column;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.td-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--c-line-soft);
+  background: var(--c-surface-2);
+  flex-shrink: 0;
+}
+
+.price-now {
+  font-weight: 600;
+  color: var(--c-ink);
+  font-family: var(--font-mono);
+}
+
+.price-ori {
+  font-size: 12px;
+  color: var(--c-ink-4);
+  text-decoration: line-through;
+  margin-left: 4px;
+}
+
+.rowbtns {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* ---------- 套餐卡 ---------- */
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.plan-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.plan-card__ic {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-primary-l);
+  color: var(--c-primary-d);
+}
+
+.plan-card__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--c-ink);
+}
+
+.plan-card__price {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--c-ink);
+  line-height: 1;
+}
+
+.plan-card__meta {
+  font-size: 12px;
+  color: var(--c-ink-4);
+  display: flex;
+  gap: 10px;
+}
+
+.plan-card__benefits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border-top: 1px dashed var(--c-line);
+  padding-top: 12px;
+}
+
+.plan-card__benefits li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--c-ink-2);
+}
+
+.plan-card__benefits li svg {
+  color: var(--c-success);
+}
+
+.plan-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+/* ---------- 钓点卡 ---------- */
+.spot-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.spot-card {
+  display: flex;
+  gap: 16px;
+  padding: 16px 18px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.spot-card__cover {
+  width: 104px;
+  height: 76px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line-soft);
+  flex-shrink: 0;
+}
+
+.spot-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.spot-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--c-ink);
+}
+
+.spot-card__sub {
+  font-size: 12px;
+  color: var(--c-ink-3);
+}
+
+.spot-card__fish {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.spot-card__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.spot-card__dist {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--c-ink);
+}
+
+.spot-card__by {
+  font-size: 12px;
+  color: var(--c-ink-4);
+}
+
+/* ---------- 星级 ---------- */
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--c-gold);
+}
+
+.stars .rate-num {
+  margin-left: 4px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--c-ink-2);
+  font-weight: 600;
+}
+
+/* ---------- 上传器 ---------- */
+.uploader-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.uploader-item {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+}
+
+.uploader-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.uploader-item__del {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.uploader-add {
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
+  border: 1.5px dashed var(--c-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--c-ink-4);
+  cursor: pointer;
+  transition: all 0.14s ease-out;
+  background: var(--c-surface-2);
+}
+
+.uploader-add:hover {
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+}
+
+/* ---------- 弹窗 ---------- */
+.modal-ico {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-ico--danger {
+  background: #fdecec;
+  color: var(--c-danger);
+}
+
+.modal-ico--info {
+  background: var(--c-primary-l);
+  color: var(--c-primary-d);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+.form-grid .full {
+  grid-column: 1 / -1;
+}
+
+/* ---------- 登录页 ---------- */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(1000px 520px at 85% -10%, rgba(15, 139, 141, 0.14), transparent 60%),
+    radial-gradient(800px 480px at 5% 105%, rgba(255, 122, 61, 0.1), transparent 55%),
+    var(--c-sidebar-2);
+}
+
+.login-card {
+  width: 400px;
+  background: var(--c-surface);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  padding: 36px 34px 28px;
+}
+
+.login-card__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 26px;
+}
+
+.login-card__logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--grad-water);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--c-ink);
+}
+
+.login-card .sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--c-ink-4);
+  letter-spacing: 1px;
+}
+
+.login-err {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: #fdecec;
+  color: var(--c-danger);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.login-tip {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--c-ink-4);
+}
+
+/* ---------- 侧边栏分组 ---------- */
+/* 菜单项增多后允许滚动，避免小屏下底部管理员信息被挤出视口 */
+.admin-sider__list {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.admin-sider__group {
+  padding: 14px 14px 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 1.5px;
+}
+
+.admin-sider__group:first-child {
+  padding-top: 6px;
+}
+
+/* ---------- 积分配置页 ---------- */
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.config-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.config-item__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-ink);
+}
+
+.config-item__desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--c-ink-4);
+}
+
+.config-item__input {
+  flex: 0 0 160px;
+}
+
+/* ---------- 评论管理 ---------- */
+.cmt-text {
+  color: var(--c-ink-2);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.cmt-imgs {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.cmt-imgs img {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--c-line-soft);
+}
+
+/* ---------- 统计卡片 ---------- */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.mini-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 64px;
+  margin-top: 12px;
+}
+
+.mini-bars__bar {
+  flex: 1;
+  background: var(--grad-water);
+  border-radius: 5px 5px 2px 2px;
+  min-height: 3px;
+}
