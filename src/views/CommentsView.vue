@@ -53,7 +53,7 @@ const pagination = reactive({
   pageSize: 10,
   itemCount: 0,
   showSizePicker: true,
-  pageSizes: [10, 20, 50],
+  pageSizes: [10, 30, 50],
   onChange: (p: number) => {
     pagination.page = p
     load()
@@ -153,7 +153,6 @@ const columns: DataTableColumns<AdminComment> = [
     title: '操作',
     key: 'actions',
     width: 100,
-    fixed: 'right',
     render: (row) =>
       h(
         NButton,
@@ -242,7 +241,7 @@ onMounted(load)
       </n-input>
     </div>
 
-    <!-- 区块：评论表格 / remote 分页 + 多选，横向滚动宽度 1150，无空数据自定义插槽 -->
+    <!-- 区块：评论表格 / remote 分页 + 多选；表体独立纵向滚动，表头常驻 -->
     <div class="card">
       <n-data-table
         :columns="columns"
@@ -251,7 +250,8 @@ onMounted(load)
         :row-key="(r: AdminComment) => r.id"
         v-model:checked-row-keys="checkedKeys"
         :pagination="pagination"
-        :scroll-x="1150"
+        :scroll-x="1000"
+        max-height="var(--table-max-h)"
         remote
         :bordered="false"
       />

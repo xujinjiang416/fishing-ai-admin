@@ -156,6 +156,7 @@ const columns: DataTableColumns<Goods> = [
   {
     title: '商品',
     key: 'goods',
+    width: 210,
     render: (row) =>
       h('div', { class: 'td-main' }, [
         imgSrc(row.img)
@@ -173,6 +174,7 @@ const columns: DataTableColumns<Goods> = [
   {
     title: '分类',
     key: 'cat',
+    width: 90,
     render: (row) =>
       h(
         NTag,
@@ -189,6 +191,7 @@ const columns: DataTableColumns<Goods> = [
   {
     title: '价格',
     key: 'price',
+    width: 110,
     render: (row) =>
       h('div', [
         h('span', { class: 'price-now' }, money(row.price)),
@@ -198,13 +201,14 @@ const columns: DataTableColumns<Goods> = [
       ]),
   },
   // 库存列：当前可售库存，等宽数字展示
-  { title: '库存', key: 'stock', render: (row) => h('span', { class: 'num' }, row.stock) },
+  { title: '库存', key: 'stock', width: 80, render: (row) => h('span', { class: 'num' }, row.stock) },
   // 销量列：累计销量，弱化样式展示
-  { title: '销量', key: 'sales', render: (row) => h('span', { class: 'num td-s' }, row.sales) },
+  { title: '销量', key: 'sales', width: 110, render: (row) => h('span', { class: 'num td-s' }, row.sales) },
   // 积分抵扣列：根据 pointsEnabled 展示「支持 / 不支持」标签（色值直接使用设计 token）
   {
     title: '积分抵扣',
     key: 'pointsEnabled',
+    width: 100,
     render: (row) =>
       row.pointsEnabled
         ? h(
@@ -222,6 +226,7 @@ const columns: DataTableColumns<Goods> = [
   {
     title: '状态',
     key: 'status',
+    width: 100,
     render: (row) =>
       h(
         NTag,
@@ -235,13 +240,12 @@ const columns: DataTableColumns<Goods> = [
       ),
   },
   // 更新时间列：缺失时显示「—」
-  { title: '更新时间', key: 'updated', render: (row) => h('span', { class: 'td-s' }, row.updated ?? '—') },
-  // 操作列：编辑与删除，固定右侧避免横向滚动时被遮挡
+  { title: '更新时间', key: 'updated', width: 150, render: (row) => h('span', { class: 'td-s' }, row.updated ?? '—') },
+  // 操作列：编辑与删除；不固定，横向滚动到最右时完整可见
   {
     title: '操作',
     key: 'actions',
     width: 130,
-    fixed: 'right',
     render: (row) =>
       h('div', { class: 'rowbtns' }, [
         h(
@@ -518,7 +522,7 @@ onMounted(load)
       <n-select v-model:value="query.status" :options="statusOptions" style="width: 110px" @update:value="resetAndLoad" />
     </div>
 
-    <!-- 区块：商品表格卡片 / remote 分页，勾选与 loading 由脚本状态驱动 -->
+    <!-- 区块：商品表格卡片 / remote 分页；表体独立纵向滚动，表头常驻 -->
     <div class="card">
       <n-data-table
         :columns="columns"
@@ -527,6 +531,8 @@ onMounted(load)
         :row-key="(r: Goods) => r.id"
         v-model:checked-row-keys="checkedKeys"
         :pagination="pagination"
+        :scroll-x="1128"
+        max-height="var(--table-max-h)"
         remote
         :bordered="false"
       />

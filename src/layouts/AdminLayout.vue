@@ -125,7 +125,6 @@ async function onLogout() {
           <span class="admin-sider__brand-sub">后台管理系统</span>
         </div>
       </div>
-      <div class="admin-sider__label">管理中心</div>
       <!-- 区块：菜单列表 / 按 menuGroups 双层循环，外层分组标题、内层路由链接；当前路径命中时加 is-active -->
       <nav class="admin-sider__list">
         <template v-for="g in menuGroups" :key="g.title">

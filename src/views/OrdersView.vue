@@ -205,7 +205,7 @@ const pagination = reactive({
   pageSize: 10,
   itemCount: 0,
   showSizePicker: true,
-  pageSizes: [10, 20, 50],
+  pageSizes: [10, 30, 50],
   onChange: (p: number) => {
     pagination.page = p
     load()
@@ -516,12 +516,12 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
     })
   }
 
-  // 固定操作列：详情按钮 + 操作下拉（无权限时下拉禁用）；阻止冒泡避免触发行点击
+  // 操作列：详情按钮 + 操作下拉（无权限时下拉禁用）；阻止冒泡避免触发行点击。
+  // 不固定右侧：列随横向滚动自然排布，滚到最右时不会被固定列遮挡。
   cols.push({
     title: '操作',
     key: 'actions',
     width: 130,
-    fixed: 'right',
     render: (row) =>
       h('div', { class: 'rowbtns', onClick: (e: MouseEvent) => e.stopPropagation() }, [
         h(NButton, { size: 'tiny', onClick: () => openDetail(row) }, { default: () => '详情' }),
@@ -539,6 +539,18 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
   })
   return cols
 })
+
+/**
+ * 表格横向滚动宽度：按当前可见列宽求和。
+ * 列显示/隐藏会改变总宽度，动态计算可保证滚到最右时所有列（含操作列）完整可见，
+ * 避免固定宽度小于实际列宽导致的挤压或遮挡。
+ */
+const tableScrollX = computed(() =>
+  columns.value.reduce(
+    (sum, col) => sum + (Number((col as { width?: number | string }).width) || 0),
+    0,
+  ),
+)
 
 /**
  * 根据订单当前状态生成可用操作菜单（与后端状态机校验一致）：
@@ -1048,56 +1060,59 @@ onMounted(() => {
 
     <!-- 区块：组合筛选栏 / 关键词与用户输入走防抖，下拉与日期变更立即查询；右侧为列设置与刷新 -->
     <div class="toolbar">
-      <n-input
-        v-model:value="query.keyword"
-        placeholder="订单编号 / 商品名称"
-        clearable
-        style="width: 200px"
-        @update:value="onKeyword"
-      >
-        <template #prefix><n-icon :component="SearchOutline" /></template>
-      </n-input>
-      <n-input
-        v-model:value="query.userKeyword"
-        placeholder="用户昵称 / UID / 手机号"
-        clearable
-        style="width: 200px"
-        @update:value="onKeyword"
-      />
-      <n-date-picker
-        v-model:value="query.range"
-        type="daterange"
-        clearable
-        style="width: 250px"
-        start-placeholder="开始日期"
-        end-placeholder="结束日期"
-        @update:value="onDateChange"
-      />
-      <n-select v-model:value="query.payMethod" :options="payMethodOptions" style="width: 140px" @update:value="resetAndLoad" />
-      <n-select v-model:value="query.status" :options="statusOptions" style="width: 130px" @update:value="resetAndLoad" />
-      <n-select v-model:value="query.deliveryType" :options="deliveryOptions" style="width: 140px" @update:value="resetAndLoad" />
-      <n-button quaternary @click="resetFilters">重置</n-button>
-      <span class="toolbar__spacer" />
-      <n-popover trigger="click" placement="bottom-end">
-        <template #trigger>
-          <n-button>
-            <template #icon><n-icon :component="SettingsOutline" /></template>
-            列设置
-          </n-button>
-        </template>
-        <n-checkbox-group v-model:value="visibleKeys">
-          <div class="col-pref">
-            <n-checkbox v-for="c in COLUMN_DEFS" :key="c.key" :value="c.key">{{ c.label }}</n-checkbox>
-          </div>
-        </n-checkbox-group>
-      </n-popover>
-      <n-button :loading="loading" @click="refreshAll">
-        <template #icon><n-icon :component="RefreshOutline" /></template>
-        刷新
-      </n-button>
+      <div class="toolbar__group">
+        <n-input
+          v-model:value="query.keyword"
+          placeholder="订单编号 / 商品名称"
+          clearable
+          style="width: 190px"
+          @update:value="onKeyword"
+        >
+          <template #prefix><n-icon :component="SearchOutline" /></template>
+        </n-input>
+        <n-input
+          v-model:value="query.userKeyword"
+          placeholder="昵称 / UID / 手机号"
+          clearable
+          style="width: 190px"
+          @update:value="onKeyword"
+        />
+        <n-date-picker
+          v-model:value="query.range"
+          type="daterange"
+          clearable
+          style="width: 240px"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          @update:value="onDateChange"
+        />
+        <n-select v-model:value="query.payMethod" :options="payMethodOptions" style="width: 130px" @update:value="resetAndLoad" />
+        <n-select v-model:value="query.status" :options="statusOptions" style="width: 120px" @update:value="resetAndLoad" />
+        <n-select v-model:value="query.deliveryType" :options="deliveryOptions" style="width: 130px" @update:value="resetAndLoad" />
+        <n-button quaternary @click="resetFilters">重置</n-button>
+      </div>
+      <div class="toolbar__group toolbar__group--end">
+        <n-popover trigger="click" placement="bottom-end">
+          <template #trigger>
+            <n-button>
+              <template #icon><n-icon :component="SettingsOutline" /></template>
+              列设置
+            </n-button>
+          </template>
+          <n-checkbox-group v-model:value="visibleKeys">
+            <div class="col-pref">
+              <n-checkbox v-for="c in COLUMN_DEFS" :key="c.key" :value="c.key">{{ c.label }}</n-checkbox>
+            </div>
+          </n-checkbox-group>
+        </n-popover>
+        <n-button :loading="loading" @click="refreshAll">
+          <template #icon><n-icon :component="RefreshOutline" /></template>
+          刷新
+        </n-button>
+      </div>
     </div>
 
-    <!-- 区块：订单表格 / remote 分页，行点击打开详情；操作列阻止冒泡避免误触 -->
+    <!-- 区块：订单表格 / remote 分页，行点击打开详情；表体独立纵向滚动，表头常驻；scroll-x 随可见列动态计算 -->
     <div class="card">
       <n-data-table
         :columns="columns"
@@ -1106,7 +1121,8 @@ onMounted(() => {
         :row-key="(r: AdminOrder) => r.no"
         :pagination="pagination"
         :row-props="(r: AdminOrder) => ({ style: 'cursor: pointer', onClick: () => openDetail(r) })"
-        :scroll-x="1560"
+        :scroll-x="tableScrollX"
+        max-height="var(--table-max-h)"
         remote
         :bordered="false"
       />

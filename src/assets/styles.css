@@ -1,67 +1,67 @@
 /* ===== 全局样式表 =====
- * 职责：管理后台全部全局样式，组织顺序为「设计 token → 基础重置 → 页面骨架 → 各业务区块」。
- * 命名：沿用 BEM 风格 .block__element--modifier（如 .admin-sider__item.is-active），
- *       状态类统一使用 is-* 前缀，便于与组件库内部类名区分。
- * 依赖：与 Naive UI 共存，仅少量覆盖 n-data-table 内边距，其余外观由组件 props 控制。
- * 约定：同权重选择器按源码先后决定覆盖关系，新增区块请追加到文件末尾对应分组，避免打乱顺序。
- * 注意：文件中不含媒体查询，自适应依赖 max-width、flex-wrap 与局部 overflow，详见各分节说明。
+ * 职责：管理后台全部全局样式，组织顺序为「设计 token → 基础重置 → 通用工具类 → 页面骨架
+ *       → 侧边栏/顶栏 → 表格 → 各业务区块 → 登录页 → 响应式」。
+ * 命名：BEM 风格 .block__element--modifier（如 .admin-sider__item.is-active），
+ *       状态类统一 is-* 前缀，与组件库内部类名区分。
+ * 依赖：与 Naive UI 共存。主题色/圆角/字号在 src/theme/index.ts 中同步映射，
+ *       此处仅做布局与外观补充，避免两套样式互相打架。
+ * 响应式：断点 1280 / 1100，最低保证 1200px 宽度下布局完整、无横向溢出。
  * ==================================================================== */
 
-/* ---------- 设计 token（源自原型 design-contract.md） ---------- */
+/* ---------- 设计 token ---------- */
 :root {
-  /* 主色（青绿=水域主题）、强调色（珊瑚橙=操作/告警）、金色（评分/等级），
-     每组含基础色与 -d 加深、-l 浅底变体，用于文字、按钮与浅色背景 */
+  /* 主色（青绿=水域主题）、强调色（珊瑚橙=操作/告警）、金色（评分/等级） */
   --c-primary: #0f8b8d;
   --c-primary-d: #0a6a6c;
-  --c-primary-l: #e5f4f4;
+  --c-primary-l: #e7f4f4;
   --c-accent: #ff7a3d;
   --c-accent-d: #e8662b;
-  --c-accent-l: #ffefe6;
+  --c-accent-l: #fff1e8;
   --c-gold: #c08a2e;
   --c-gold-l: #fbf3e2;
   --c-sidebar: #0b2426;
   --c-sidebar-2: #0e2f31;
-  --c-bg: #f4f7f6;
+  --c-bg: #f5f7f7;
   --c-surface: #ffffff;
-  --c-surface-2: #f8fafa;
-  --c-line: #e3eae8;
-  --c-line-soft: #eff3f2;
-  --c-ink: #12211f;
-  --c-ink-2: #3d4f4d;
-  --c-ink-3: #6e807e;
-  --c-ink-4: #9aa9a7;
+  --c-surface-2: #f7faf9;
+  --c-line: #e5ebe9;
+  --c-line-soft: #eef3f1;
+  --c-ink: #16211f;
+  --c-ink-2: #3b4b49;
+  --c-ink-3: #6b7d7b;
+  --c-ink-4: #97a6a4;
   --c-success: #2e9e6b;
   --c-warn: #d9971a;
   --c-danger: #e5484d;
   --c-info: #1b7fd4;
 
-  /* 品牌渐变：侧边栏纵向暗色、水域主渐变（主按钮/选中态）、日出强调渐变、金色渐变 */
+  /* 品牌渐变 */
   --grad-side: linear-gradient(180deg, #0e2f31 0%, #0b2426 100%);
-  --grad-water: linear-gradient(160deg, #128e90 0%, #0b5f72 100%);
+  --grad-water: linear-gradient(160deg, #14989a 0%, #0b6478 100%);
   --grad-dawn: linear-gradient(135deg, #ffb06b 0%, #ff7a3d 100%);
   --grad-gold: linear-gradient(135deg, #e3b25e 0%, #c08a2e 100%);
 
-  /* 字体族：标题用衬线体营造中文质感，正文用跨平台 CJK 无衬线，数字/代码用等宽体便于对齐 */
-  --font-display: 'Noto Serif SC', 'Songti SC', 'STSong', Georgia, serif;
+  /* 字体族：正文跨平台 CJK 无衬线；数字统一等宽以便纵向对齐 */
+  --font-display: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC',
+    system-ui, sans-serif;
   --font-body: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC',
     system-ui, sans-serif;
   --font-mono: 'SF Mono', 'JetBrains Mono', 'Menlo', Consolas, monospace;
 
-  /* 阴影三档：sm 卡片默认、md 悬浮/图标、lg 弹层与登录卡；色值带轻微青色，呼应主题 */
-  --shadow-sm: 0 1px 2px rgba(18, 33, 31, 0.05), 0 1px 3px rgba(18, 33, 31, 0.04);
+  /* 阴影：卡片 / 悬浮 / 弹层三档，色值带轻微青色呼应主题 */
+  --shadow-sm: 0 1px 2px rgba(18, 33, 31, 0.04), 0 1px 3px rgba(18, 33, 31, 0.03);
   --shadow-md: 0 6px 18px rgba(11, 95, 114, 0.08);
   --shadow-lg: 0 16px 40px rgba(11, 95, 114, 0.14);
 
-  /* 布局尺寸：侧边栏宽度与顶栏高度，分别被 .admin-sider/.admin-main 与 .admin-top 引用，
-     修改此处即可整体缩放骨架，勿在子元素中写死像素值 */
-  --sidebar-w: 236px;
-  --topbar-h: 60px;
+  /* 布局尺寸：侧边栏宽度与顶栏高度，修改此处即可整体缩放骨架 */
+  --sidebar-w: 224px;
+  --topbar-h: 56px;
+  --radius: 10px;
+  /* 列表页表格最大高度：视口越高展示越多，保证表头始终停留在表格顶部 */
+  --table-max-h: clamp(320px, calc(100vh - 420px), 620px);
 }
 
-/* ===== 基础重置与全局画布 =====
-   box-sizing: border-box 让内边距不再撑破固定宽度（表单/表格依赖此行为）；
-   html/body/#app 统一撑满视口高度，固定侧边栏与 100% 高度容器才能正确计算；
-   body 的两层 radial-gradient 仅为装饰性水色光晕，不参与布局，也不拦截点击。 */
+/* ===== 基础重置与全局画布 ===== */
 * {
   box-sizing: border-box;
 }
@@ -80,19 +80,80 @@ body {
   color: var(--c-ink);
   background-color: var(--c-bg);
   background-image:
-    radial-gradient(900px 420px at 12% -8%, rgba(15, 139, 141, 0.07), transparent 60%),
-    radial-gradient(760px 360px at 92% 108%, rgba(255, 122, 61, 0.05), transparent 60%);
+    radial-gradient(900px 420px at 12% -8%, rgba(15, 139, 141, 0.05), transparent 60%),
+    radial-gradient(760px 360px at 92% 108%, rgba(255, 122, 61, 0.04), transparent 60%);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ---------- 通用页面结构 ---------- */
-/* ===== 页面骨架（page / pagehead / toolbar / card） =====
-   自适应策略：不使用媒体查询，靠 max-width 限宽居中 + flex-wrap 自动换行；
-   .page 的 min-width: 0 防止其作为 flex/grid 子项时被超宽表格撑破；
-   .pagehead 底部对齐，使标题块与操作按钮基线一致。 */
+/* 全局细滚动条：表格纵向滚动、侧边栏菜单、弹窗内容共用 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(107, 125, 123, 0.32);
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 125, 123, 0.5);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ===== 通用工具类 =====
+   业务页面（如缓存管理趋势图、缓存规则提示）复用的最小工具集，
+   保持「只用类名、不写内联样式」的约定，避免再次出现类名缺失导致的布局塌陷。 */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.mt4 {
+  margin-top: 4px;
+}
+
+.mt8 {
+  margin-top: 8px;
+}
+
+.mt12 {
+  margin-top: 12px;
+}
+
+.mt16 {
+  margin-top: 16px;
+}
+
+.mt20 {
+  margin-top: 20px;
+}
+
+.notice {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--c-primary-l);
+  color: var(--c-primary-d);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+/* ---------- 页面骨架 ---------- */
+/* 自适应策略：max-width 限宽居中 + flex-wrap 自动换行 + 局部 overflow；
+   .page 的 min-width: 0 防止其作为 flex 子项时被超宽表格撑破。 */
 .page {
-  padding: 24px 28px 40px;
-  /* 随窗口自适应：超宽屏下限制最大宽度并居中，避免表格被拉散 */
+  padding: 20px 24px 32px;
   width: 100%;
   max-width: 1680px;
   margin: 0 auto;
@@ -101,8 +162,9 @@ body {
 
 .pagehead {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 18px;
 }
 
@@ -110,19 +172,24 @@ body {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
+  line-height: 1.3;
   color: var(--c-ink);
   letter-spacing: 0.2px;
 }
 
 .pagehead__desc {
-  margin: 6px 0 0;
+  margin: 5px 0 0;
   font-size: 13px;
+  line-height: 1.5;
   color: var(--c-ink-3);
 }
 
 .pagehead__actions {
   display: flex;
+  align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .toolbar {
@@ -130,7 +197,6 @@ body {
   align-items: center;
   flex-wrap: wrap; /* 窄窗口下筛选条件自动换行，避免溢出 */
   gap: 10px;
-  row-gap: 10px;
   margin-bottom: 14px;
 }
 
@@ -138,10 +204,24 @@ body {
   flex: 1;
 }
 
+/* 工具栏分组：筛选条件为一组（可整体换行），右侧操作为另一组并靠右；
+   列较多的筛选栏换行时不会出现单个按钮孤零零占一行的情况。 */
+.toolbar__group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.toolbar__group--end {
+  margin-left: auto;
+}
+
 .card {
   background: var(--c-surface);
   border: 1px solid var(--c-line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
 }
 
@@ -149,14 +229,30 @@ body {
   padding: 18px 20px;
 }
 
-/* ---------- KPI ---------- */
-/* ===== KPI 指标卡 =====
-   .kpi-grid 固定 4 列等宽栅格；窄屏时列宽被压缩而非换行，如需移动端适配在此加断点；
-   .kpi 的 overflow: hidden 用于裁掉左侧装饰色条溢出圆角；
-   色条由 ::before 绝对定位实现，不占用内容空间，--accent/--gold/--success 切换语义色。 */
-.kpi-grid {
+.card__hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 18px 0;
+}
+
+.card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--c-ink);
+}
+
+.card__sub {
+  font-size: 12px;
+  color: var(--c-ink-4);
+}
+
+/* ---------- KPI 指标卡 ---------- */
+.kpi-grid,
+.stat-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 14px;
 }
@@ -166,19 +262,25 @@ body {
   padding: 16px 18px;
   background: var(--c-surface);
   border: 1px solid var(--c-line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.kpi:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 .kpi::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 12px;
-  bottom: 12px;
+  top: 14px;
+  bottom: 14px;
   width: 3px;
-  border-radius: 2px;
+  border-radius: 0 2px 2px 0;
   background: var(--grad-water);
 }
 
@@ -203,13 +305,14 @@ body {
 }
 
 .kpi__val {
-  margin: 10px 0 2px;
+  margin: 12px 0 4px;
   font-family: var(--font-display);
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   color: var(--c-ink);
-  letter-spacing: 0.5px;
+  letter-spacing: 0.2px;
 }
 
 .kpi__ft {
@@ -226,38 +329,35 @@ body {
   color: var(--c-ink-4);
 }
 
-/* ---------- 迷你柱状图 ---------- */
-/* ===== 图表容器（迷你柱状图） =====
-   纯 CSS 实现的趋势小图（非 ECharts）：.mini-bars 固定 64px 高度并底部对齐，
-   子项 flex:1 均分宽度，min-height: 3px 保证 0 或极小值仍可见；
-   父级可覆盖 height:auto 用于图例等非绘图场景（见 PlansView 用法）。 */
+/* ---------- 图表与趋势 ---------- */
 .dash-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 14px;
 }
 
-.card__hd {
+/* 迷你柱状图（会员页等复用） */
+.stat-row {
+  margin-bottom: 14px;
+}
+
+.mini-bars {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px 0;
+  align-items: flex-end;
+  gap: 6px;
+  height: 64px;
+  margin-top: 12px;
 }
 
-.card__title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--c-ink);
+.mini-bars__bar {
+  flex: 1;
+  background: var(--grad-water);
+  border-radius: 5px 5px 2px 2px;
+  min-height: 3px;
 }
 
-.card__sub {
-  font-size: 12px;
-  color: var(--c-ink-4);
-}
-
-/* ---------- 空态 / 骨架 ---------- */
-/* 通用空态：纵向居中排列图标与文案，固定上下留白 48px，避免空表格区域塌陷 */
+/* ---------- 空态 ---------- */
 .empty {
   display: flex;
   flex-direction: column;
@@ -267,12 +367,9 @@ body {
   color: var(--c-ink-4);
 }
 
-/* ---------- 侧边栏 ---------- */
 /* ===== 侧边栏与主框架 =====
-   布局：.admin-shell 为 flex 容器；.admin-sider 用 fixed 脱离文档流固定在左侧，
-   .admin-main 再以 margin-left: var(--sidebar-w) 让位，两处宽度必须同源（均取 CSS 变量）。
-   层级：侧边栏 z-index 20 高于吸顶顶栏 10，保证菜单浮于内容之上。
-   注意：固定侧边栏不随页面滚动，也未做移动端折叠；窄屏下需自行收缩 --sidebar-w 或改为抽屉。 */
+   .admin-sider 固定定位；.admin-main 用 margin-left 让位，宽度同源取 --sidebar-w。
+   菜单区 flex:1 + min-height:0 保证在矮屏下内部滚动，底部账号区始终可见。 */
 .admin-shell {
   display: flex;
   min-height: 100%;
@@ -293,81 +390,93 @@ body {
 .admin-sider__brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px 22px 18px;
+  gap: 11px;
+  padding: 16px 18px 14px;
+  flex-shrink: 0;
 }
 
 .admin-sider__logo {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
   background: var(--grad-water);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 4px 12px rgba(11, 95, 114, 0.35);
+  flex-shrink: 0;
 }
 
 .admin-sider__brand-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  min-width: 0;
 }
 
 .admin-sider__brand-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #fff;
-  letter-spacing: 1px;
+  letter-spacing: 0.8px;
 }
 
 .admin-sider__brand-sub {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
-  letter-spacing: 1.5px;
-}
-
-.admin-sider__label {
-  padding: 10px 24px 6px;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
-  letter-spacing: 2px;
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 1.2px;
 }
 
 .admin-sider__list {
-  padding: 0 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 10px 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.admin-sider__group {
+  padding: 12px 12px 4px;
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.36);
+  letter-spacing: 1.4px;
+}
+
+.admin-sider__group:first-child {
+  padding-top: 2px;
 }
 
 .admin-sider__item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 9px;
+  padding: 8px 12px;
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.7);
   text-decoration: none;
-  font-size: 14px;
-  transition: all 0.14s ease-out;
+  font-size: 13.5px;
+  line-height: 1.4;
+  transition: background 0.14s ease-out, color 0.14s ease-out;
 }
 
 .admin-sider__item:hover {
   color: #fff;
-  background: rgba(255, 255,255, 0.08);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .admin-sider__item.is-active {
   color: #fff;
   background: var(--grad-water);
-  box-shadow: 0 6px 16px rgba(11, 95, 114, 0.35);
+  box-shadow: 0 4px 12px rgba(11, 95, 114, 0.32);
 }
 
 .admin-sider__foot {
-  margin-top: auto;
-  padding: 14px 16px;
+  flex-shrink: 0;
+  padding: 12px 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
@@ -411,10 +520,6 @@ body {
 }
 
 /* ---------- 顶栏 ---------- */
-/* ===== 顶栏 =====
-   position: sticky 吸顶，滚动时始终可见；半透明白底 + backdrop-filter 形成毛玻璃，
-   不支持 backdrop-filter 的环境自动回退为半透明纯色。
-   层级：z-index 10 低于侧边栏，避免遮挡菜单；右侧元素 flex-shrink: 0 防止被搜索框压缩。 */
 .admin-main {
   flex: 1;
   margin-left: var(--sidebar-w);
@@ -430,8 +535,8 @@ body {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 0 28px;
-  background: rgba(255, 255, 255, 0.86);
+  padding: 0 24px;
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--c-line-soft);
   z-index: 10;
@@ -446,7 +551,7 @@ body {
 }
 
 .admin-top__search {
-  flex: 0 1 280px;
+  flex: 0 1 260px;
   min-width: 120px;
 }
 
@@ -459,6 +564,7 @@ body {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  transition: background 0.14s ease, color 0.14s ease;
 }
 
 .admin-top__ico:hover {
@@ -466,9 +572,7 @@ body {
   color: var(--c-ink);
 }
 
-/* ===== 标签与徽标 =====
-   .dot-badge 为未读/状态小红点，依赖父级 .admin-top__ico 的 position: relative 定位，
-   白色描边用于与深色图标分离；标签本体（n-tag）外观由 Naive UI 控制，此处只负责容器排布。 */
+/* 未读/状态小红点，依赖父级 .admin-top__ico 的 position: relative */
 .dot-badge {
   position: absolute;
   top: 5px;
@@ -498,9 +602,6 @@ body {
 }
 
 /* ---------- 头像 ---------- */
-/* ===== 头像 =====
-   圆形头像，尺寸由 --sm/--md/--lg 修饰符决定；底色默认水域渐变，
-   --accent/--gold 用于区分不同身份或强调角色。 */
 .avatar {
   display: inline-flex;
   align-items: center;
@@ -538,25 +639,69 @@ body {
   background: var(--grad-gold);
 }
 
-/* ---------- 表格微调 ---------- */
 /* ===== 表格 =====
-   仅覆盖 Naive UI data-table 的外层留白：卡片内表格补左右/上内边距避免贴边，
-   分页区单独留白，避免与表格内容挤在一起（底部间距由分页区承担，故表格 padding-bottom 为 0）。
-   单元格辅助类：.td-main/.td-sub 负责图+文双列与双行结构，.td-thumb 为 44px 定宽缩略图，
-   .num/.price-now 使用等宽字体，保证数字纵向对齐。 */
-/* 卡片内表格：上/左/右留出内边距，避免表格与卡片边缘贴边（底部由分页区自带间距） */
-.card > .n-data-table {
-  padding: 16px 18px 0;
+   结构说明：n-data-table 在 .card 内（缓存页还有 n-spin 包裹），
+   因此内边距需要同时覆盖直接子级与 spin 内容层，避免表格贴边或留白缺失。
+   滚动：各列表页为 n-data-table 传入 max-height（交互见页面脚本），
+         表格进入 fixed 布局，表头独立于表体，表体内部纵向滚动、表头始终可见；
+         横向由 scroll-x 控制，列宽不再被压缩，滚到最右可看到含操作列的全部内容。 */
+.card > .n-data-table,
+.card > .n-spin-container > .n-spin-content > .n-data-table {
+  padding: 14px 16px 0;
 }
 
 .card .n-data-table__pagination {
-  padding: 10px 2px 14px;
+  padding: 12px 2px 14px;
+  margin-top: 0;
+  border-top: 1px solid var(--c-line-soft);
 }
 
+/* 表头：单行不换行，避免中文列名被挤成两行 */
+.n-data-table .n-data-table-th {
+  white-space: nowrap;
+  font-size: 12.5px;
+  letter-spacing: 0.2px;
+}
+
+/* 单元格：默认单行，超长内容由列渲染函数使用省略号组件处理 */
+.n-data-table .n-data-table-td {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* 固定列（如后续启用 fixed）必须有实底，避免与滚动中的内容重叠透视 */
+.n-data-table .n-data-table-th--fixed-left,
+.n-data-table .n-data-table-th--fixed-right {
+  background-color: var(--c-surface-2);
+}
+
+.n-data-table .n-data-table-td--fixed-left,
+.n-data-table .n-data-table-td--fixed-right {
+  background-color: var(--c-surface);
+  z-index: 2;
+}
+
+.n-data-table .n-data-table-tr:hover .n-data-table-td--fixed-left,
+.n-data-table .n-data-table-tr:hover .n-data-table-td--fixed-right {
+  background-color: #f4fafa;
+}
+
+/* 表格空态：统一留白，避免无数据时卡片塌陷 */
+.n-data-table .n-data-table-empty {
+  padding: 44px 0;
+}
+
+/* 表格内滚动区域：细滚动条 + 顶部/底部留白 */
+.n-data-table .n-scrollbar {
+  scrollbar-width: thin;
+}
+
+/* 单元格辅助类：图+文双列、双行结构、缩略图、数字/价格等 */
 .td-main {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .td-t {
@@ -573,11 +718,13 @@ body {
 .td-sub {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .num {
   font-family: var(--font-mono);
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .td-thumb {
@@ -594,6 +741,7 @@ body {
   font-weight: 600;
   color: var(--c-ink);
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .price-ori {
@@ -607,16 +755,13 @@ body {
   display: flex;
   gap: 6px;
   align-items: center;
+  flex-wrap: nowrap;
 }
 
 /* ---------- 套餐卡 ---------- */
-/* ===== 卡片（套餐卡 / 钓点卡） =====
-   统一卡片皮肤：白底 + 1px 描边 + 12px 圆角 + sm 阴影；
-   卡片内容用纵向 flex 排列，底部操作区 margin-top: auto 吸底，
-   保证同一栅格行内卡片高度不一致时按钮仍对齐。 */
 .plan-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -627,14 +772,20 @@ body {
   padding: 20px;
   background: var(--c-surface);
   border: 1px solid var(--c-line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.18s ease;
+}
+
+.plan-card:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .plan-card__head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  gap: 10px;
 }
 
 .plan-card__ic {
@@ -646,6 +797,7 @@ body {
   justify-content: center;
   background: var(--c-primary-l);
   color: var(--c-primary-d);
+  flex-shrink: 0;
 }
 
 .plan-card__name {
@@ -659,8 +811,9 @@ body {
 
 .plan-card__price {
   font-family: var(--font-display);
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--c-ink);
   line-height: 1;
 }
@@ -670,17 +823,17 @@ body {
   color: var(--c-ink-4);
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .plan-card__benefits {
   margin: 0;
-  padding: 0;
+  padding: 12px 0 0;
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: 7px;
   border-top: 1px dashed var(--c-line);
-  padding-top: 12px;
 }
 
 .plan-card__benefits li {
@@ -699,6 +852,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   margin-top: auto;
 }
 
@@ -715,14 +869,19 @@ body {
   padding: 16px 18px;
   background: var(--c-surface);
   border: 1px solid var(--c-line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.18s ease;
+}
+
+.spot-card:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .spot-card__cover {
   width: 104px;
   height: 76px;
-  border-radius: 10px;
+  border-radius: 8px;
   object-fit: cover;
   background: var(--c-surface-2);
   border: 1px solid var(--c-line-soft);
@@ -744,6 +903,7 @@ body {
   font-size: 15px;
   font-weight: 600;
   color: var(--c-ink);
+  flex-wrap: wrap;
 }
 
 .spot-card__sub {
@@ -751,7 +911,6 @@ body {
   color: var(--c-ink-3);
 }
 
-/* 鱼种标签容器：flex-wrap 保证标签较多时自动换行而不溢出卡片；标签本体为 Naive UI n-tag */
 .spot-card__fish {
   display: flex;
   gap: 6px;
@@ -763,6 +922,7 @@ body {
   flex-direction: column;
   align-items: flex-end;
   justify-content: space-between;
+  gap: 10px;
   flex-shrink: 0;
 }
 
@@ -770,6 +930,7 @@ body {
   font-family: var(--font-mono);
   font-size: 20px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--c-ink);
 }
 
@@ -779,7 +940,6 @@ body {
 }
 
 /* ---------- 星级 ---------- */
-/* 评分星级：图标继承金色，右侧数字用等宽体，避免不同位数评分导致宽度跳动 */
 .stars {
   display: inline-flex;
   align-items: center;
@@ -795,10 +955,7 @@ body {
   font-weight: 600;
 }
 
-/* ---------- 上传器 ---------- */
-/* ===== 图片上传 =====
-   .uploader-grid 自动换行排列；.uploader-item 固定 84px 方形并用 overflow: hidden 裁切圆角，
-   删除按钮绝对定位在右上角，因此父项必须保持 position: relative。 */
+/* ---------- 图片上传 ---------- */
 .uploader-grid {
   display: flex;
   flex-wrap: wrap;
@@ -874,13 +1031,10 @@ body {
   color: var(--c-primary-d);
 }
 
-/* ===== 表单 =====
-   .form-grid 为两列等宽栅格：列间距 16px、行间距交给表单控件自身的 margin，
-   避免网格 gap 与控件 margin 叠加造成过大留白；
-   .full 跨满整行，用于长文本域、上传等宽内容。 */
+/* ---------- 表单 ---------- */
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 16px;
 }
 
@@ -889,9 +1043,6 @@ body {
 }
 
 /* ---------- 登录页 ---------- */
-/* ===== 登录页 =====
-   整屏 flex 居中，背景为多层径向渐变叠加暗色底（与侧边栏同色系）；
-   登录卡固定 400px 宽，使用 lg 阴影突出层级；.login-err 为行内错误提示条。 */
 .login-page {
   min-height: 100vh;
   display: flex;
@@ -906,8 +1057,9 @@ body {
 
 .login-card {
   width: 400px;
+  max-width: 100%;
   background: var(--c-surface);
-  border-radius: 18px;
+  border-radius: 16px;
   box-shadow: var(--shadow-lg);
   padding: 36px 34px 28px;
 }
@@ -957,39 +1109,10 @@ body {
   margin-bottom: 14px;
 }
 
-.login-tip {
-  margin-top: 18px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--c-ink-4);
-}
-
-/* ---------- 侧边栏分组 ---------- */
-/* 菜单项增多后允许滚动，避免小屏下底部管理员信息被挤出视口 */
-.admin-sider__list {
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-/* 分组标题：小字号 + 大行距模拟「小标签」，首组减小上内边距以免与品牌区留白叠加 */
-.admin-sider__group {
-  padding: 14px 14px 4px;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
-  letter-spacing: 1.5px;
-}
-
-.admin-sider__group:first-child {
-  padding-top: 6px;
-}
-
-/* ---------- 积分配置页 ---------- */
-/* ===== 积分配置 =====
-   .config-grid 两列卡片栅格；.config-item 为「说明 + 控件」两端对齐的单行布局，
-   控件固定 160px 宽（flex: 0 0 160px），保证同类配置项输入框宽度一致。 */
+/* ---------- 积分配置 ---------- */
 .config-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -1001,7 +1124,7 @@ body {
   padding: 16px 18px;
   background: var(--c-surface);
   border: 1px solid var(--c-line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1022,9 +1145,6 @@ body {
 }
 
 /* ---------- 评论管理 ---------- */
-/* ===== 评论管理 =====
-   正文使用 word-break: break-word，防止超长英文/链接撑破表格列宽；
-   配图缩略图统一 46px 方形裁切，超出数量时由 flex-wrap 换行。 */
 .cmt-text {
   color: var(--c-ink-2);
   line-height: 1.5;
@@ -1046,29 +1166,65 @@ body {
   border: 1px solid var(--c-line-soft);
 }
 
-/* ---------- 统计卡片 ---------- */
-/* ===== 统计卡片与趋势迷你图 =====
-   .stat-row 与 KPI 同构，固定 4 列栅格；.mini-bars 为纯 CSS 柱状图：
-   容器底部对齐并固定 64px 高度，柱体 flex:1 均分宽度，
-   min-height: 3px 保证数值为 0 或极小时仍留可见基线，圆角仅上方两角以体现「从底部生长」。 */
-.stat-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  margin-bottom: 14px;
+/* ---------- 响应式 ---------- */
+/* 1280 以下：收窄侧边栏与页面留白，保证 1200px 宽度仍有充足内容区 */
+@media (max-width: 1280px) {
+  :root {
+    --sidebar-w: 204px;
+  }
+
+  .page {
+    padding: 18px 18px 28px;
+  }
+
+  .admin-top {
+    padding: 0 18px;
+  }
+
+  .kpi__val {
+    font-size: 26px;
+  }
+
+  .plan-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
-.mini-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  height: 64px;
-  margin-top: 12px;
+/* 1100 以下（低于最低适配宽度）：栅格降列，避免出现横向溢出 */
+@media (max-width: 1100px) {
+  .kpi-grid,
+  .stat-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dash-grid,
+  .config-grid,
+  .plan-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pagehead {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .pagehead__actions {
+    width: 100%;
+  }
 }
 
-.mini-bars__bar {
-  flex: 1;
-  background: var(--grad-water);
-  border-radius: 5px 5px 2px 2px;
-  min-height: 3px;
+/* 900 以下：钓点卡改为纵向结构，避免封面挤压文字（超出最低适配范围，仅作兜底） */
+@media (max-width: 900px) {
+  .spot-card {
+    flex-wrap: wrap;
+  }
+
+  .spot-card__cover {
+    width: 100%;
+    height: 140px;
+  }
 }

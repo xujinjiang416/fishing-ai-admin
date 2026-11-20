@@ -44,18 +44,18 @@ export const themeOverrides: GlobalThemeOverrides = {
     fontFamily:
       '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif',
     /** 文本色阶：base 最深，1/2/3 依次变浅 */
-    textColorBase: '#12211F',
-    textColor1: '#12211F',
-    textColor2: '#3D4F4D',
-    textColor3: '#6E807E',
-    borderColor: '#E3EAE8',
-    dividerColor: '#EFF3F2',
+    textColorBase: '#16211F',
+    textColor1: '#16211F',
+    textColor2: '#3B4B49',
+    textColor3: '#6B7D7B',
+    borderColor: '#E5EBE9',
+    dividerColor: '#EEF3F1',
     /** 弹窗/表格/卡片/页面底色 */
     modalColor: '#FFFFFF',
-    tableHeaderColor: '#F8FAFA',
-    tableColorHover: '#F4FAFA',
+    tableHeaderColor: '#F7FAF9',
+    tableColorHover: '#F3FAF9',
     cardColor: '#FFFFFF',
-    bodyColor: '#F4F7F6',
+    bodyColor: '#F5F7F7',
   },
   // 按钮：统一中等字重
   Button: {
@@ -63,15 +63,15 @@ export const themeOverrides: GlobalThemeOverrides = {
   },
   // 表格：表头浅灰底、深色加粗表头文字、悬停行浅青底
   DataTable: {
-    thColor: '#F8FAFA',
-    thTextColor: '#3D4F4D',
+    thColor: '#F7FAF9',
+    thTextColor: '#4B5B59',
     thFontWeight: '600',
-    tdColorHover: '#F4FAFA',
-    borderColor: '#EFF3F2',
+    tdColorHover: '#F3FAF9',
+    borderColor: '#EEF3F1',
   },
   // 卡片：统一描边色
   Card: {
-    borderColor: '#E3EAE8',
+    borderColor: '#E5EBE9',
   },
   // 弹窗/对话框：更大圆角
   Modal: {

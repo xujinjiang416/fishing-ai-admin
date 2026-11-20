@@ -325,7 +325,7 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="page">
+  <div class="page spots-page">
     <!-- 区块：页头 / 左侧标题与说明，右侧已选数量、批量删除与新增入口 / 未勾选时批量删除禁用 -->
     <div class="pagehead">
       <div>
@@ -385,98 +385,100 @@ onMounted(load)
       </div>
     </div>
 
-    <!-- 区块：钓点卡片列表 / 响应式网格，单卡含封面、信息、评分与操作 / 无图片时展示占位图标 -->
-    <n-spin :show="loading">
-      <div class="spot-grid">
-        <div v-for="s in rows" :key="s.id" class="spot-card">
-          <template v-if="imgSrc(s)">
-            <img v-if="imgSrc(s)" :src="imgSrc(s)" class="spot-card__cover" alt="" />
-          </template>
-          <div v-else class="spot-card__cover" style="display: flex; align-items: center; justify-content: center; color: var(--c-ink-4)">
-            <n-icon :component="ImageOutline" :size="24" />
-          </div>
+    <!-- 区块：钓点卡片列表 / 列表区独立滚动，页头与筛选分页栏固定 / 无图片时展示占位图标 -->
+    <div class="spots-scroll">
+      <n-spin :show="loading">
+        <div class="spot-grid">
+          <div v-for="s in rows" :key="s.id" class="spot-card">
+            <template v-if="imgSrc(s)">
+              <img v-if="imgSrc(s)" :src="imgSrc(s)" class="spot-card__cover" alt="" />
+            </template>
+            <div v-else class="spot-card__cover" style="display: flex; align-items: center; justify-content: center; color: var(--c-ink-4)">
+              <n-icon :component="ImageOutline" :size="24" />
+            </div>
 
-          <div class="spot-card__body">
-            <div class="spot-card__title">
-              <n-checkbox
-                :checked="checkedKeys.includes(s.id)"
-                @update:checked="(v: boolean) => toggleCheck(s.id, v)"
-              />
-              {{ s.name }}
-              <n-tag
-                size="small"
-                round
-                :color="statusTag(s.status).color"
-                :text-color="statusTag(s.status).textColor"
-              >
-                {{ s.status === 'online' ? '已上架' : '已下架' }}
-              </n-tag>
-              <n-tag size="small" round :color="payTag(s.pay).color" :text-color="payTag(s.pay).textColor">
-                {{ s.pay ?? '—' }}
-              </n-tag>
+            <div class="spot-card__body">
+              <div class="spot-card__title">
+                <n-checkbox
+                  :checked="checkedKeys.includes(s.id)"
+                  @update:checked="(v: boolean) => toggleCheck(s.id, v)"
+                />
+                {{ s.name }}
+                <n-tag
+                  size="small"
+                  round
+                  :color="statusTag(s.status).color"
+                  :text-color="statusTag(s.status).textColor"
+                >
+                  {{ s.status === 'online' ? '已上架' : '已下架' }}
+                </n-tag>
+                <n-tag size="small" round :color="payTag(s.pay).color" :text-color="payTag(s.pay).textColor">
+                  {{ s.pay ?? '—' }}
+                </n-tag>
+              </div>
+              <div class="spot-card__sub">{{ s.city ?? '—' }}{{ s.coords ? ` · ${s.coords}` : '' }}</div>
+              <div class="spot-card__fish">
+                <n-tag
+                  v-for="f in s.fish"
+                  :key="f"
+                  size="tiny"
+                  round
+                  :color="fishTag().color"
+                  :text-color="fishTag().textColor"
+                >
+                  {{ f }}
+                </n-tag>
+              </div>
+              <div class="stars">
+                <n-icon
+                  v-for="(on, i) in stars(s.rating)"
+                  :key="i"
+                  :component="on ? Star : StarOutline"
+                  :size="14"
+                />
+                <span class="rate-num">{{ s.rating.toFixed(1) }}</span>
+                <span class="td-s">· {{ s.commentCount }} 条评论</span>
+              </div>
             </div>
-            <div class="spot-card__sub">{{ s.city ?? '—' }}{{ s.coords ? ` · ${s.coords}` : '' }}</div>
-            <div class="spot-card__fish">
-              <n-tag
-                v-for="f in s.fish"
-                :key="f"
-                size="tiny"
-                round
-                :color="fishTag().color"
-                :text-color="fishTag().textColor"
-              >
-                {{ f }}
-              </n-tag>
-            </div>
-            <div class="stars">
-              <n-icon
-                v-for="(on, i) in stars(s.rating)"
-                :key="i"
-                :component="on ? Star : StarOutline"
-                :size="14"
-              />
-              <span class="rate-num">{{ s.rating.toFixed(1) }}</span>
-              <span class="td-s">· {{ s.commentCount }} 条评论</span>
+
+            <div class="spot-card__right">
+              <div class="spot-card__dist">{{ s.dist.toFixed(1) }} km</div>
+              <div class="spot-card__by">{{ s.addedBy }} · {{ s.createdAt }}</div>
+              <div class="rowbtns" style="margin-top: 6px">
+                <n-button
+                  size="small"
+                  :type="s.status === 'online' ? 'warning' : 'primary'"
+                  :quaternary="s.status === 'online'"
+                  @click="toggle(s)"
+                >
+                  <template #icon>
+                    <n-icon :component="s.status === 'online' ? RemoveOutline : CheckmarkOutline" />
+                  </template>
+                  {{ s.status === 'online' ? '下架' : '上架' }}
+                </n-button>
+                <n-button size="small" @click="openEdit(s)">
+                  <template #icon>
+                    <n-icon :component="CreateOutline" />
+                  </template>
+                  编辑
+                </n-button>
+                <n-button size="small" type="error" quaternary @click="confirmDelete(s)">
+                  <template #icon>
+                    <n-icon :component="TrashOutline" />
+                  </template>
+                  删除
+                </n-button>
+              </div>
             </div>
           </div>
-
-          <div class="spot-card__right">
-            <div class="spot-card__dist">{{ s.dist.toFixed(1) }} km</div>
-            <div class="spot-card__by">{{ s.addedBy }} · {{ s.createdAt }}</div>
-            <div class="rowbtns" style="margin-top: 6px">
-              <n-button
-                size="small"
-                :type="s.status === 'online' ? 'warning' : 'primary'"
-                :quaternary="s.status === 'online'"
-                @click="toggle(s)"
-              >
-                <template #icon>
-                  <n-icon :component="s.status === 'online' ? RemoveOutline : CheckmarkOutline" />
-                </template>
-                {{ s.status === 'online' ? '下架' : '上架' }}
-              </n-button>
-              <n-button size="small" @click="openEdit(s)">
-                <template #icon>
-                  <n-icon :component="CreateOutline" />
-                </template>
-                编辑
-              </n-button>
-              <n-button size="small" type="error" quaternary @click="confirmDelete(s)">
-                <template #icon>
-                  <n-icon :component="TrashOutline" />
-                </template>
-                删除
-              </n-button>
-            </div>
+          <!-- 区块：空态 / 请求结束且无数据时展示，给出「暂无钓点数据」提示 -->
+          <div v-if="!rows.length && !loading" class="card empty">
+            <n-icon :component="LocationOutline" :size="28" />
+            暂无钓点数据
           </div>
         </div>
-        <!-- 区块：空态 / 请求结束且无数据时展示，给出「暂无钓点数据」提示 -->
-        <div v-if="!rows.length && !loading" class="card empty">
-          <n-icon :component="LocationOutline" :size="28" />
-          暂无钓点数据
-        </div>
-      </div>
-    </n-spin>
+      </n-spin>
+    </div>
 
     <!-- 区块：新增/编辑弹窗 / 左右两栏：左图片上传，右基础信息表单 / mask-closable=false 防止误点遮罩丢失输入 -->
     <n-modal
@@ -556,3 +558,27 @@ onMounted(load)
     </n-modal>
   </div>
 </template>
+
+<style scoped>
+/* 页面固定为视口高度：页头与筛选/分页栏保持不动，仅卡片列表内部滚动 */
+.spots-page {
+  height: calc(100vh - var(--topbar-h));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 16px;
+}
+
+.spots-page .pagehead,
+.spots-page .toolbar {
+  flex-shrink: 0;
+}
+
+.spots-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+}
+</style>

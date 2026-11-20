@@ -144,6 +144,7 @@ const columns: DataTableColumns<AdminUser> = [
   {
     title: '用户',
     key: 'user',
+    width: 180,
     render: (row) =>
       h('div', { class: 'td-main' }, [
         h('span', { class: 'avatar avatar--sm' }, row.avatar),
@@ -153,14 +154,17 @@ const columns: DataTableColumns<AdminUser> = [
         ]),
       ]),
   },
+  // 用户名列：注册用户名（历史手机号账号为空），未设置时显示「—」
+  { title: '用户名', key: 'username', width: 140, render: (row) => h('span', {}, row.username || '—') },
   // 手机号列：null 时显示占位符「—」，等宽数字样式
-  { title: '手机号', key: 'phone', render: (row) => h('span', { class: 'num' }, row.phone ?? '—') },
+  { title: '手机号', key: 'phone', width: 130, render: (row) => h('span', { class: 'num' }, row.phone ?? '—') },
   // 城市列：未填写时显示「—」
-  { title: '城市', key: 'city', render: (row) => row.city ?? '—' },
+  { title: '城市', key: 'city', width: 100, render: (row) => row.city ?? '—' },
   // 会员列：套餐标签（planTag 配色）+ 到期时间副行；未开通时不显示到期文案
   {
     title: '会员',
     key: 'plan',
+    width: 140,
     render: (row) =>
       h('div', { class: 'td-sub' }, [
         h(
@@ -178,11 +182,12 @@ const columns: DataTableColumns<AdminUser> = [
       ]),
   },
   // 积分列：当前可用积分，等宽数字展示
-  { title: '积分', key: 'points', render: (row) => h('span', { class: 'num' }, row.points) },
+  { title: '积分', key: 'points', width: 90, render: (row) => h('span', { class: 'num' }, row.points) },
   // 状态列：正常 / 已停用标签，配色由 statusTag 统一映射
   {
     title: '状态',
     key: 'status',
+    width: 110,
     render: (row) =>
       h(
         NTag,
@@ -196,13 +201,12 @@ const columns: DataTableColumns<AdminUser> = [
       ),
   },
   // 最近活跃列：后端返回的格式化时间文案，缺失时显示「—」
-  { title: '最近活跃', key: 'lastActive', render: (row) => h('span', { class: 'td-s' }, row.lastActive ?? '—') },
-  // 操作列：编辑、分配会员、删除；固定右侧，宽度 220 保证按钮不换行
+  { title: '最近活跃', key: 'lastActive', width: 150, render: (row) => h('span', { class: 'td-s' }, row.lastActive ?? '—') },
+  // 操作列：编辑、分配会员、删除；不固定，滚到最右时可完整展示
   {
     title: '操作',
     key: 'actions',
-    width: 220,
-    fixed: 'right',
+    width: 200,
     render: (row) =>
       h('div', { class: 'rowbtns' }, [
         h(NButton, { size: 'tiny', onClick: () => openEdit(row) }, { default: () => '编辑' }),
@@ -454,7 +458,7 @@ onMounted(load)
     <div class="toolbar">
       <n-input
         v-model:value="query.keyword"
-        placeholder="搜索昵称 / 手机号 / uid"
+        placeholder="搜索用户名 / 昵称 / 手机号 / uid"
         clearable
         style="width: 260px"
         @update:value="onKeyword"
@@ -487,7 +491,7 @@ onMounted(load)
       />
     </div>
 
-    <!-- 区块：用户表格卡片 / remote 分页，勾选与 loading 由脚本状态驱动 -->
+    <!-- 区块：用户表格卡片 / remote 分页；表体独立纵向滚动，横向可完整浏览所有列 -->
     <div class="card">
       <n-data-table
         :columns="columns"
@@ -496,6 +500,8 @@ onMounted(load)
         :row-key="(r: AdminUser) => r.uid"
         v-model:checked-row-keys="checkedKeys"
         :pagination="pagination"
+        :scroll-x="1300"
+        max-height="var(--table-max-h)"
         remote
         :bordered="false"
       />

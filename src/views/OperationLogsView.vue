@@ -107,7 +107,7 @@ const pagination = reactive({
   pageSize: 10,
   itemCount: 0,
   showSizePicker: true,
-  pageSizes: [10, 20, 50],
+  pageSizes: [10, 30, 50],
   onChange: (p: number) => {
     pagination.page = p
     load()
@@ -236,7 +236,7 @@ onMounted(load)
       />
     </div>
 
-    <!-- 区块：日志表格 / remote 分页，只读无操作列，横向滚动宽度 1200 -->
+    <!-- 区块：日志表格 / remote 分页，只读无操作列；表体独立纵向滚动，表头常驻 -->
     <div class="card">
       <n-data-table
         :columns="columns"
@@ -245,6 +245,7 @@ onMounted(load)
         :row-key="(r: OperationLogItem) => r.id"
         :pagination="pagination"
         :scroll-x="1200"
+        max-height="var(--table-max-h)"
         remote
         :bordered="false"
       />

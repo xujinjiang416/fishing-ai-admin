@@ -51,6 +51,8 @@ export interface Page<T> {
 export interface AdminUser {
   /** 用户业务唯一标识（字符串 ID） */
   uid: string
+  /** 用户名（注册账号，历史手机号账号为空串） */
+  username: string
   /** 用户昵称 */
   nickname: string
   /** 头像 URL，可为空字符串 */
@@ -105,7 +107,7 @@ export interface Plan {
   sales: number
   /** 上下架状态：on 启用 / off 停用 */
   status: string
-  /** 排序值，越小越靠前 */
+  /** 排序权重（非负整数，越大越靠前） */
   sort: number
   /** 权益说明文案列表 */
   benefits: string[]
@@ -157,7 +159,7 @@ export interface WeatherLog {
   score: number
   /** 结论文案（如「适合出钓」） */
   verdict: string
-  /** 鱼情等级：explode 爆户 / hot 狂口 / fair 有口 / slow 慢口 / stop 停口 */
+  /** 鱼情等级：explode 爆户 / hot 连杆 / fair 有口 / slow 慢口 / stop 停口 */
   level: string
   /** 天气状况描述，可为 null */
   condition: string | null

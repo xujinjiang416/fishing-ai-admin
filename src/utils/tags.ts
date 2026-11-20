@@ -88,10 +88,10 @@ export function statusTag(s: string | null | undefined): TagStyle {
   }
 }
 
-/** 鱼情等级映射：爆户 / 狂口 / 有口 / 慢口 / 停口 */
+/** 鱼情等级映射：爆户 / 连杆 / 有口 / 慢口 / 停口 */
 const LEVEL_MAP: Record<string, TagStyle> = {
   explode: { text: '爆户', ...T.accent },
-  hot: { text: '狂口', ...T.success },
+  hot: { text: '连杆', ...T.success },
   fair: { text: '有口', ...T.warn },
   slow: { text: '慢口', ...T.mute },
   stop: { text: '停口', ...T.mute },

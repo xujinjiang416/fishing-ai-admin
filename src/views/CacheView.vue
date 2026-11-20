@@ -40,7 +40,9 @@ import {
 import { computed, h, onMounted, reactive, ref } from 'vue'
 
 import { api, type CacheItem, type CacheQuery, type CacheStats, type FishCacheItem } from '@/api/admin'
+import BaseChart from '@/components/BaseChart.vue'
 import { useAuthStore } from '@/stores/auth'
+import { initBarChartOption } from '@/utils/chart/initOptionUtils'
 
 /**
  * 生成文本省略渲染：超出容器宽度时以省略号截断，用于表格长文本列。
@@ -79,7 +81,7 @@ const pagination = reactive({
   pageSize: 10,
   itemCount: 0,
   showSizePicker: true,
-  pageSizes: [10, 20, 50],
+  pageSizes: [10, 30, 50],
   onChange: (p: number) => {
     pagination.page = p
     load()
@@ -104,7 +106,7 @@ const fishPagination = reactive({
   pageSize: 10,
   itemCount: 0,
   showSizePicker: true,
-  pageSizes: [10, 20, 50],
+  pageSizes: [10, 30, 50],
   onChange: (p: number) => {
     fishPagination.page = p
     loadFish()
@@ -242,15 +244,25 @@ const sourceText = (s: string) =>
   ({ qweather: '和风', llm: '大模型', fallback: '兜底', rule: '规则' } as Record<string, string>)[s] || s
 
 /**
- * 计算趋势柱高度百分比，用于近 7 天命中趋势图。
- * @param n 当前柱的数值
- * @param arr 全部柱数值，用于取最大值做归一化
- * @returns 6%~100% 的 CSS 高度字符串（最小 6%，保证低值仍可见）
+ * 近 7 天缓存命中趋势图配置：查询总量与命中次数双柱对比。
+ * 复用后台统一的 ECharts 柱状图基础配置，与数据看板 / 订单页保持相同的坐标轴与提示框样式；
+ * stats 未加载时返回空对象，BaseChart 渲染空配置不报错。
  */
-function barHeight(n: number, arr: number[]): string {
-  const max = Math.max(1, ...arr)
-  return Math.max(6, Math.round((n / max) * 100)) + '%'
-}
+const hitChartOption = computed(() => {
+  const s = stats.value
+  if (!s) return {}
+  return initBarChartOption({
+    colorList: ['#A9DEE0', '#128E90'],
+    xAxis: s.trend.days,
+    unit: '次',
+    grid: { top: '46px', left: '8px', right: '16px', bottom: '4px', containLabel: true },
+    showDataZoom: false,
+    dataList: [
+      { name: '查询总量', data: s.trend.totals, barMaxWidth: 26, showAreaStyle: true },
+      { name: '命中次数', data: s.trend.hits, barMaxWidth: 26, showAreaStyle: true },
+    ],
+  })
+})
 
 // 天气缓存表格列（remote 服务端分页）：长文本统一走 ellipsis，时间/数值使用等宽字体样式
 const columns: DataTableColumns<CacheItem> = [
@@ -316,12 +328,11 @@ const columns: DataTableColumns<CacheItem> = [
     width: 150,
     render: (row) => h('span', { class: 'td-s' }, `${row.condition ?? '—'} ${row.temp != null ? row.temp + '°C' : ''}`),
   },
-  // 操作列：详情所有人可见；刷新/删除仅超管，列宽随权限变化并固定右侧
+  // 操作列：详情所有人可见；刷新/删除仅超管，列宽随权限变化（不固定，避免横向滚动时遮挡其他列）
   {
     title: '操作',
     key: 'actions',
     width: isSuper.value ? 180 : 80,
-    fixed: 'right',
     render: (row) =>
       h('div', { class: 'rowbtns' }, [
         h(NButton, { size: 'tiny', onClick: () => openDetail(row) }, { default: () => '详情' }),
@@ -415,12 +426,11 @@ const fishColumns: DataTableColumns<FishCacheItem> = [
   { title: '大小', key: 'sizeKb', width: 90, render: (row) => h('span', { class: 'num' }, row.sizeKb + ' KB') },
   // 命中（hitCount）：该缓存被读取的次数，用于评估缓存收益
   { title: '命中', key: 'hitCount', width: 70, render: (row) => h('span', { class: 'num' }, row.hitCount) },
-  // 操作列：详情所有人可见；删除仅超管，列宽随权限变化并固定右侧
+  // 操作列：详情所有人可见；删除仅超管，列宽随权限变化（不固定，避免横向滚动时遮挡其他列）
   {
     title: '操作',
     key: 'actions',
     width: isSuper.value ? 150 : 80,
-    fixed: 'right',
     render: (row) =>
       h('div', { class: 'rowbtns' }, [
         h(NButton, { size: 'tiny', onClick: () => openFishDetail(row) }, { default: () => '详情' }),
@@ -667,20 +677,14 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 区块：命中趋势 / 近 7 天柱状图，柱高由 barHeight 按最大值归一化 / 悬停 title 显示当日命中数与查询总量 -->
+    <!-- 区块：命中趋势 / 近 7 天柱状图，使用 ECharts 渲染，双柱对比查询总量与命中次数 -->
     <div v-if="stats" class="card card--pad mt12">
-      <div class="card__title">近 7 天缓存命中趋势</div>
-      <div class="row" style="align-items: flex-end; gap: 6px; height: 70px; margin-top: 12px">
-        <div
-          v-for="(n, i) in stats.trend.hits"
-          :key="i"
-          class="grow"
-          :style="{ height: barHeight(n, stats.trend.hits), background: 'var(--c-primary)', opacity: 0.85, borderRadius: '5px 5px 2px 2px' }"
-          :title="`${stats.trend.days[i]}：命中 ${n} / ${stats.trend.totals[i]}`"
-        ></div>
+      <div class="card__hd" style="padding: 0">
+        <span class="card__title">近 7 天缓存命中趋势</span>
+        <span class="card__sub">命中次数 / 查询总量</span>
       </div>
-      <div class="row mt4">
-        <span v-for="(d, i) in stats.trend.days" :key="i" class="td-s" style="flex: 1; text-align: center">{{ d }}</span>
+      <div class="mt4">
+        <BaseChart :option="hitChartOption" height="240px" />
       </div>
     </div>
 
@@ -705,7 +709,7 @@ onMounted(() => {
           <n-input v-model:value="query.endDate" placeholder="结束日期 YYYY-MM-DD" style="width: 180px" @update:value="onKeyword" />
         </div>
 
-        <!-- 区块：天气缓存表格 / remote 分页，勾选与批量按钮联动 / scroll-x=1600 保证窄屏横向滚动 -->
+        <!-- 区块：天气缓存表格 / remote 分页，勾选与批量按钮联动 / max-height 让表体独立纵向滚动，表头常驻；scroll-x 保证所有列可完整横向浏览 -->
         <div class="card">
           <n-spin :show="loading">
             <n-data-table
@@ -715,7 +719,8 @@ onMounted(() => {
               :row-key="(r: CacheItem) => r.id"
               v-model:checked-row-keys="checkedKeys"
               :pagination="pagination"
-              :scroll-x="1600"
+              :scroll-x="1500"
+              max-height="var(--table-max-h)"
               remote
               :bordered="false"
             />
@@ -742,7 +747,7 @@ onMounted(() => {
           <n-input v-model:value="fishQuery.endDate" placeholder="结束日期 YYYY-MM-DD" style="width: 180px" @update:value="onKeyword" />
         </div>
 
-        <!-- 区块：鱼情缓存表格 / 独立分页与勾选状态 / 列定义见 fishColumns -->
+        <!-- 区块：鱼情缓存表格 / 独立分页与勾选状态 / 列定义见 fishColumns；同样启用表体纵向滚动 -->
         <div class="card">
           <n-spin :show="loading">
             <n-data-table
@@ -752,7 +757,8 @@ onMounted(() => {
               :row-key="(r: FishCacheItem) => r.id"
               v-model:checked-row-keys="fishCheckedKeys"
               :pagination="fishPagination"
-              :scroll-x="1600"
+              :scroll-x="1580"
+              max-height="var(--table-max-h)"
               remote
               :bordered="false"
             />

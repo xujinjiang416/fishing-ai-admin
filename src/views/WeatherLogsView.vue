@@ -196,7 +196,6 @@ const columns: DataTableColumns<WeatherLog> = [
     title: '操作',
     key: 'actions',
     width: 160,
-    fixed: 'right',
     render: (row) =>
       h('div', { class: 'rowbtns' }, [
         h(
@@ -342,7 +341,7 @@ onMounted(load)
       />
     </div>
 
-    <!-- 区块：天气记录表格 / remote 分页 + 多选；行点击打开详情，横向滚动宽度 1400 -->
+    <!-- 区块：天气记录表格 / remote 分页 + 多选；行点击打开详情，表体独立纵向滚动 -->
     <div class="card">
       <n-data-table
         :columns="columns"
@@ -353,6 +352,7 @@ onMounted(load)
         :pagination="pagination"
         :row-props="(row: WeatherLog) => ({ style: 'cursor: pointer', onClick: () => openDetail(row) })"
         :scroll-x="1400"
+        max-height="var(--table-max-h)"
         remote
         :bordered="false"
       />

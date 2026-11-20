@@ -67,7 +67,7 @@ async function submit() {
 <template>
   <!-- 区块：登录页外层 / 铺满视口的居中容器，背景与尺寸由全局样式控制 -->
   <div class="login-page">
-    <!-- 区块：登录卡片 / 纵向排列品牌头、错误提示、表单与演示账号提示 -->
+    <!-- 区块：登录卡片 / 纵向排列品牌头、错误提示与表单 -->
     <div class="login-card">
       <!-- 品牌区：Logo、标题与副标题，纯展示无交互 -->
       <div class="login-card__brand">
@@ -115,9 +115,6 @@ async function submit() {
           {{ loading ? '登录中…' : '登 录' }}
         </n-button>
       </n-form>
-
-      <!-- 演示账号提示：静态文案，正式环境应移除或替换 -->
-      <p class="login-tip">演示账号 admin · 密码 meng01040416</p>
     </div>
   </div>
 </template>
