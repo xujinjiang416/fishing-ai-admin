@@ -1,5 +1,16 @@
+/* ===== 全局样式表 =====
+ * 职责：管理后台全部全局样式，组织顺序为「设计 token → 基础重置 → 页面骨架 → 各业务区块」。
+ * 命名：沿用 BEM 风格 .block__element--modifier（如 .admin-sider__item.is-active），
+ *       状态类统一使用 is-* 前缀，便于与组件库内部类名区分。
+ * 依赖：与 Naive UI 共存，仅少量覆盖 n-data-table 内边距，其余外观由组件 props 控制。
+ * 约定：同权重选择器按源码先后决定覆盖关系，新增区块请追加到文件末尾对应分组，避免打乱顺序。
+ * 注意：文件中不含媒体查询，自适应依赖 max-width、flex-wrap 与局部 overflow，详见各分节说明。
+ * ==================================================================== */
+
 /* ---------- 设计 token（源自原型 design-contract.md） ---------- */
 :root {
+  /* 主色（青绿=水域主题）、强调色（珊瑚橙=操作/告警）、金色（评分/等级），
+     每组含基础色与 -d 加深、-l 浅底变体，用于文字、按钮与浅色背景 */
   --c-primary: #0f8b8d;
   --c-primary-d: #0a6a6c;
   --c-primary-l: #e5f4f4;
@@ -24,24 +35,33 @@
   --c-danger: #e5484d;
   --c-info: #1b7fd4;
 
+  /* 品牌渐变：侧边栏纵向暗色、水域主渐变（主按钮/选中态）、日出强调渐变、金色渐变 */
   --grad-side: linear-gradient(180deg, #0e2f31 0%, #0b2426 100%);
   --grad-water: linear-gradient(160deg, #128e90 0%, #0b5f72 100%);
   --grad-dawn: linear-gradient(135deg, #ffb06b 0%, #ff7a3d 100%);
   --grad-gold: linear-gradient(135deg, #e3b25e 0%, #c08a2e 100%);
 
+  /* 字体族：标题用衬线体营造中文质感，正文用跨平台 CJK 无衬线，数字/代码用等宽体便于对齐 */
   --font-display: 'Noto Serif SC', 'Songti SC', 'STSong', Georgia, serif;
   --font-body: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC',
     system-ui, sans-serif;
   --font-mono: 'SF Mono', 'JetBrains Mono', 'Menlo', Consolas, monospace;
 
+  /* 阴影三档：sm 卡片默认、md 悬浮/图标、lg 弹层与登录卡；色值带轻微青色，呼应主题 */
   --shadow-sm: 0 1px 2px rgba(18, 33, 31, 0.05), 0 1px 3px rgba(18, 33, 31, 0.04);
   --shadow-md: 0 6px 18px rgba(11, 95, 114, 0.08);
   --shadow-lg: 0 16px 40px rgba(11, 95, 114, 0.14);
 
+  /* 布局尺寸：侧边栏宽度与顶栏高度，分别被 .admin-sider/.admin-main 与 .admin-top 引用，
+     修改此处即可整体缩放骨架，勿在子元素中写死像素值 */
   --sidebar-w: 236px;
   --topbar-h: 60px;
 }
 
+/* ===== 基础重置与全局画布 =====
+   box-sizing: border-box 让内边距不再撑破固定宽度（表单/表格依赖此行为）；
+   html/body/#app 统一撑满视口高度，固定侧边栏与 100% 高度容器才能正确计算；
+   body 的两层 radial-gradient 仅为装饰性水色光晕，不参与布局，也不拦截点击。 */
 * {
   box-sizing: border-box;
 }
@@ -66,6 +86,10 @@ body {
 }
 
 /* ---------- 通用页面结构 ---------- */
+/* ===== 页面骨架（page / pagehead / toolbar / card） =====
+   自适应策略：不使用媒体查询，靠 max-width 限宽居中 + flex-wrap 自动换行；
+   .page 的 min-width: 0 防止其作为 flex/grid 子项时被超宽表格撑破；
+   .pagehead 底部对齐，使标题块与操作按钮基线一致。 */
 .page {
   padding: 24px 28px 40px;
   /* 随窗口自适应：超宽屏下限制最大宽度并居中，避免表格被拉散 */
@@ -126,6 +150,10 @@ body {
 }
 
 /* ---------- KPI ---------- */
+/* ===== KPI 指标卡 =====
+   .kpi-grid 固定 4 列等宽栅格；窄屏时列宽被压缩而非换行，如需移动端适配在此加断点；
+   .kpi 的 overflow: hidden 用于裁掉左侧装饰色条溢出圆角；
+   色条由 ::before 绝对定位实现，不占用内容空间，--accent/--gold/--success 切换语义色。 */
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -199,6 +227,10 @@ body {
 }
 
 /* ---------- 迷你柱状图 ---------- */
+/* ===== 图表容器（迷你柱状图） =====
+   纯 CSS 实现的趋势小图（非 ECharts）：.mini-bars 固定 64px 高度并底部对齐，
+   子项 flex:1 均分宽度，min-height: 3px 保证 0 或极小值仍可见；
+   父级可覆盖 height:auto 用于图例等非绘图场景（见 PlansView 用法）。 */
 .dash-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -225,6 +257,7 @@ body {
 }
 
 /* ---------- 空态 / 骨架 ---------- */
+/* 通用空态：纵向居中排列图标与文案，固定上下留白 48px，避免空表格区域塌陷 */
 .empty {
   display: flex;
   flex-direction: column;
@@ -235,6 +268,11 @@ body {
 }
 
 /* ---------- 侧边栏 ---------- */
+/* ===== 侧边栏与主框架 =====
+   布局：.admin-shell 为 flex 容器；.admin-sider 用 fixed 脱离文档流固定在左侧，
+   .admin-main 再以 margin-left: var(--sidebar-w) 让位，两处宽度必须同源（均取 CSS 变量）。
+   层级：侧边栏 z-index 20 高于吸顶顶栏 10，保证菜单浮于内容之上。
+   注意：固定侧边栏不随页面滚动，也未做移动端折叠；窄屏下需自行收缩 --sidebar-w 或改为抽屉。 */
 .admin-shell {
   display: flex;
   min-height: 100%;
@@ -373,6 +411,10 @@ body {
 }
 
 /* ---------- 顶栏 ---------- */
+/* ===== 顶栏 =====
+   position: sticky 吸顶，滚动时始终可见；半透明白底 + backdrop-filter 形成毛玻璃，
+   不支持 backdrop-filter 的环境自动回退为半透明纯色。
+   层级：z-index 10 低于侧边栏，避免遮挡菜单；右侧元素 flex-shrink: 0 防止被搜索框压缩。 */
 .admin-main {
   flex: 1;
   margin-left: var(--sidebar-w);
@@ -424,6 +466,9 @@ body {
   color: var(--c-ink);
 }
 
+/* ===== 标签与徽标 =====
+   .dot-badge 为未读/状态小红点，依赖父级 .admin-top__ico 的 position: relative 定位，
+   白色描边用于与深色图标分离；标签本体（n-tag）外观由 Naive UI 控制，此处只负责容器排布。 */
 .dot-badge {
   position: absolute;
   top: 5px;
@@ -453,6 +498,9 @@ body {
 }
 
 /* ---------- 头像 ---------- */
+/* ===== 头像 =====
+   圆形头像，尺寸由 --sm/--md/--lg 修饰符决定；底色默认水域渐变，
+   --accent/--gold 用于区分不同身份或强调角色。 */
 .avatar {
   display: inline-flex;
   align-items: center;
@@ -491,6 +539,11 @@ body {
 }
 
 /* ---------- 表格微调 ---------- */
+/* ===== 表格 =====
+   仅覆盖 Naive UI data-table 的外层留白：卡片内表格补左右/上内边距避免贴边，
+   分页区单独留白，避免与表格内容挤在一起（底部间距由分页区承担，故表格 padding-bottom 为 0）。
+   单元格辅助类：.td-main/.td-sub 负责图+文双列与双行结构，.td-thumb 为 44px 定宽缩略图，
+   .num/.price-now 使用等宽字体，保证数字纵向对齐。 */
 /* 卡片内表格：上/左/右留出内边距，避免表格与卡片边缘贴边（底部由分页区自带间距） */
 .card > .n-data-table {
   padding: 16px 18px 0;
@@ -557,6 +610,10 @@ body {
 }
 
 /* ---------- 套餐卡 ---------- */
+/* ===== 卡片（套餐卡 / 钓点卡） =====
+   统一卡片皮肤：白底 + 1px 描边 + 12px 圆角 + sm 阴影；
+   卡片内容用纵向 flex 排列，底部操作区 margin-top: auto 吸底，
+   保证同一栅格行内卡片高度不一致时按钮仍对齐。 */
 .plan-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -694,6 +751,7 @@ body {
   color: var(--c-ink-3);
 }
 
+/* 鱼种标签容器：flex-wrap 保证标签较多时自动换行而不溢出卡片；标签本体为 Naive UI n-tag */
 .spot-card__fish {
   display: flex;
   gap: 6px;
@@ -721,6 +779,7 @@ body {
 }
 
 /* ---------- 星级 ---------- */
+/* 评分星级：图标继承金色，右侧数字用等宽体，避免不同位数评分导致宽度跳动 */
 .stars {
   display: inline-flex;
   align-items: center;
@@ -737,6 +796,9 @@ body {
 }
 
 /* ---------- 上传器 ---------- */
+/* ===== 图片上传 =====
+   .uploader-grid 自动换行排列；.uploader-item 固定 84px 方形并用 overflow: hidden 裁切圆角，
+   删除按钮绝对定位在右上角，因此父项必须保持 position: relative。 */
 .uploader-grid {
   display: flex;
   flex-wrap: wrap;
@@ -812,6 +874,10 @@ body {
   color: var(--c-primary-d);
 }
 
+/* ===== 表单 =====
+   .form-grid 为两列等宽栅格：列间距 16px、行间距交给表单控件自身的 margin，
+   避免网格 gap 与控件 margin 叠加造成过大留白；
+   .full 跨满整行，用于长文本域、上传等宽内容。 */
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -823,6 +889,9 @@ body {
 }
 
 /* ---------- 登录页 ---------- */
+/* ===== 登录页 =====
+   整屏 flex 居中，背景为多层径向渐变叠加暗色底（与侧边栏同色系）；
+   登录卡固定 400px 宽，使用 lg 阴影突出层级；.login-err 为行内错误提示条。 */
 .login-page {
   min-height: 100vh;
   display: flex;
@@ -902,6 +971,7 @@ body {
   overflow-x: hidden;
 }
 
+/* 分组标题：小字号 + 大行距模拟「小标签」，首组减小上内边距以免与品牌区留白叠加 */
 .admin-sider__group {
   padding: 14px 14px 4px;
   font-size: 11px;
@@ -914,6 +984,9 @@ body {
 }
 
 /* ---------- 积分配置页 ---------- */
+/* ===== 积分配置 =====
+   .config-grid 两列卡片栅格；.config-item 为「说明 + 控件」两端对齐的单行布局，
+   控件固定 160px 宽（flex: 0 0 160px），保证同类配置项输入框宽度一致。 */
 .config-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -949,6 +1022,9 @@ body {
 }
 
 /* ---------- 评论管理 ---------- */
+/* ===== 评论管理 =====
+   正文使用 word-break: break-word，防止超长英文/链接撑破表格列宽；
+   配图缩略图统一 46px 方形裁切，超出数量时由 flex-wrap 换行。 */
 .cmt-text {
   color: var(--c-ink-2);
   line-height: 1.5;
@@ -971,6 +1047,10 @@ body {
 }
 
 /* ---------- 统计卡片 ---------- */
+/* ===== 统计卡片与趋势迷你图 =====
+   .stat-row 与 KPI 同构，固定 4 列栅格；.mini-bars 为纯 CSS 柱状图：
+   容器底部对齐并固定 64px 高度，柱体 flex:1 均分宽度，
+   min-height: 3px 保证数值为 0 或极小时仍留可见基线，圆角仅上方两角以体现「从底部生长」。 */
 .stat-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

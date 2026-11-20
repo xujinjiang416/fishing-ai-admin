@@ -1,4 +1,12 @@
 <script setup lang="ts">
+/**
+ * DashboardView.vue — 数据看板（后台首页）
+ *
+ * 职责：汇总展示 KPI 指标、近 7 日天气查询/营收趋势、最近动态与最新订单。
+ * 数据来源：GET /admin/overview（api.overview），单次返回 kpi / trend / activity / orders。
+ * 关键交互：刷新按钮重新拉取数据；导出报表为演示占位（仅成功提示，未对接导出接口）。
+ * 权限/限制：需登录后访问；页面整体只读，不提供写操作。
+ */
 import {
   AlertCircleOutline,
   CloudOutline,
@@ -22,12 +30,20 @@ import { useAuthStore } from '@/stores/auth'
 import { initBarChartOption } from '@/utils/chart/initOptionUtils'
 import { money, statusTag, todayCN } from '@/utils/tags'
 
+// 全局消息实例：导出报表等操作的轻提示
 const message = useMessage()
+// 认证 store：仅用于页头展示当前管理员昵称（displayName）
 const auth = useAuthStore()
 
+// 看板数据源；null 表示首次加载尚未完成，模板据此展示骨架屏
 const overview = ref<Overview | null>(null)
+// 请求中标记：驱动刷新按钮 loading 与空数据时的骨架屏
 const loading = ref(true)
 
+/**
+ * 动态图标映射：后端 activity[].icon 返回语义键（如 user-plus），
+ * 此处映射为图标组件；未命中的键在模板中回退为 AlertCircleOutline。
+ */
 const activityIcons: Record<string, Component> = {
   'user-plus': PersonAddOutline,
   'cloud-sun': CloudOutline,
@@ -37,6 +53,16 @@ const activityIcons: Record<string, Component> = {
   'alert-triangle': AlertCircleOutline,
 }
 
+/**
+ * KPI 卡片配置（由 overview.kpi 派生，数据未就绪时返回空数组）
+ * 每项字段：
+ * - cls：卡片主题类名，用于配色强调；
+ * - icon：卡片图标组件；
+ * - label：指标名称；
+ * - val：主数值（营收经 money 格式化）；
+ * - ft：底部补充说明文案；
+ * - up：补充指标是否为正增长，false 时模板加 is-down 样式置灰。
+ */
 const kpis = computed(() => {
   const k = overview.value?.kpi
   if (!k) return []
@@ -99,6 +125,7 @@ const weatherOption = computed(() => {
   })
 })
 
+/** 近 7 日营收趋势图配置：橙色柱 + 面积，单位「元」；数据未就绪时返回空配置 */
 const revenueOption = computed(() => {
   if (!overview.value) return {}
   return initBarChartOption({
@@ -118,6 +145,12 @@ const revenueOption = computed(() => {
   })
 })
 
+/**
+ * 加载看板数据
+ * 步骤：1) 置 loading；2) 请求 /admin/overview；3) 成功后整体覆盖 overview；
+ * 4) finally 复位 loading（请求异常由 axios 拦截器统一提示）。
+ * @returns {Promise<void>}
+ */
 async function load() {
   loading.value = true
   try {
@@ -127,15 +160,23 @@ async function load() {
   }
 }
 
+/**
+ * 导出报表（演示占位）
+ * 当前仅给出成功提示，尚未调用后端导出接口。
+ * @returns {void}
+ */
 function exportReport() {
   message.success('报表已导出（演示）')
 }
 
+// 首次进入页面即拉取看板数据
 onMounted(load)
 </script>
 
 <template>
+  <!-- 区块：看板根容器 / 页头 + KPI + 图表 + 动态与订单，自上而下单列布局 -->
   <div class="page">
+    <!-- 区块：页头 / 左侧标题与欢迎语（含当前日期），右侧导出与刷新操作 -->
     <div class="pagehead">
       <div>
         <h2 class="pagehead__title">数据看板</h2>
@@ -157,9 +198,12 @@ onMounted(load)
       </div>
     </div>
 
+    <!-- 首次加载骨架：仅 loading 且尚无数据时展示，避免刷新已有数据时页面闪烁 -->
     <n-skeleton v-if="loading && !overview" :repeat="3" text size="large" />
 
+    <!-- 数据区：overview 就绪后整体渲染（骨架与数据二选一） -->
     <template v-else-if="overview">
+      <!-- 区块：KPI 卡片网格 / 四列自适应，数据来自 kpis 计算属性 -->
       <div class="kpi-grid">
         <div v-for="k in kpis" :key="k.label" class="kpi" :class="k.cls">
           <div class="kpi__label">
@@ -171,6 +215,7 @@ onMounted(load)
         </div>
       </div>
 
+      <!-- 区块：趋势图区 / 两列等宽卡片，分别展示天气查询与营收的近 7 日走势 -->
       <div class="dash-grid">
         <div class="card">
           <div class="card__hd">
@@ -192,7 +237,9 @@ onMounted(load)
         </div>
       </div>
 
+      <!-- 区块：动态与订单区 / 左右两列，各含卡片标题与条数统计 -->
       <div class="dash-grid">
+        <!-- 卡片：最近动态 / 图标 + 文案 + 时间，按接口返回顺序展示 -->
         <div class="card">
           <div class="card__hd">
             <span class="card__title">最近动态</span>
@@ -213,9 +260,11 @@ onMounted(load)
               </div>
             </n-list-item>
           </n-list>
+          <!-- 空态：无动态数据时展示占位文案 -->
           <div v-else class="empty">暂无动态</div>
         </div>
 
+        <!-- 卡片：最新订单 / 表格展示订单号、用户、商品、金额、状态与日期 -->
         <div class="card">
           <div class="card__hd">
             <span class="card__title">最新订单</span>
@@ -257,6 +306,7 @@ onMounted(load)
               </tr>
             </tbody>
           </n-table>
+          <!-- 空态：无订单数据时展示占位文案 -->
           <div v-else class="empty">暂无订单</div>
         </div>
       </div>
@@ -265,6 +315,7 @@ onMounted(load)
 </template>
 
 <style scoped>
+/* 订单表格表头：缩小字号并使用次级文字色，弱化表头以突出数据行 */
 .n-table :deep(th) {
   font-size: 12.5px;
   color: var(--c-ink-3);

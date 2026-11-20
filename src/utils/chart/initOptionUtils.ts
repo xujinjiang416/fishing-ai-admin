@@ -1,3 +1,27 @@
+/**
+ * ECharts option 构造工具集（管理后台通用图表配置）
+ *
+ * 模块职责：
+ * 1. 提供柱状图、折线图、柱状+折线混合图、饼图、折柱混合多轴图的 option 工厂函数；
+ * 2. 统一各图表的配色、网格、坐标轴、tooltip、图例与 dataZoom 等基础样式；
+ * 3. 统一 tooltip 的 HTML 结构，保证不同图表在页面中的视觉表现一致。
+ *
+ * 输入输出约定：
+ * - 每个 init*Option 函数接收「业务配置对象（含数据列表）」，返回可直接传入
+ *   `echarts.setOption()` 的纯配置对象，不持有 DOM / 实例引用，函数内无副作用；
+ * - 颜色默认取 chartTheme 的色盘 getColorDisk()；主题色通过 getVariable() 读取 CSS 变量，
+ *   因此换肤时无需修改本文件；
+ * - tooltip / legend 的 formatter 依赖调用方传入的单位(unit)与小数位(valueDecimals)。
+ *
+ * 使用方式：
+ *   const option = initLineChartOption({ xAxis, unit: 'kg', dataList })
+ *   chart.setOption(option)
+ *
+ * 注意事项：
+ * - 返回的 option 允许被调用方覆盖局部字段（自行传入 tooltip / grid / colorList）；
+ * - tooltip 使用内联样式拼 HTML，是为了避免 ECharts 生成的 HTML 与全局样式冲突；
+ * - 渐变色的 colorStops 统一为「顶部高不透明度 → 底部全透明」，依赖自上而下的坐标方向。
+ */
 import dayjs from 'dayjs'
 import { getVariable, getColorDisk, colorToRgba } from './chartTheme'
 
@@ -35,9 +59,16 @@ interface DataParams {
   lineData: number[] | string[] // 折线图数据
 }
 
+/**
+ * 创建「柱线混合图」使用的数值轴（Y 轴）配置项
+ * 左右两条 Y 轴共用同一套视觉规则，仅单位不同。
+ * @param unit 轴名/单位（如 kW、条、℃），为空时不显示轴名
+ * @returns ECharts Y 轴配置：数值轴 + 单位名称 + 虚线分割线，且强制从 0 起（min: 0）
+ */
 const createBarLineYAxisItem = (unit?: string) => ({
   type: 'value' as const,
   name: unit || '',
+  // 轴名与轴线之间的留白（px），避免与刻度文字重叠
   nameGap: 26,
   nameTextStyle: {
     color: getVariable('foreground-secondary')
@@ -56,6 +87,20 @@ const createBarLineYAxisItem = (unit?: string) => ({
   min: 0
 })
 
+/**
+ * 构造「柱状图 + 折线图」双 Y 轴混合图表 option
+ *
+ * 结构：第 1、2 个系列（柱/线，type 由 chartType 决定）使用左侧 Y 轴，
+ * 第 3 个系列固定为折线并使用右侧 Y 轴，适合「数量 + 比例/趋势」类业务数据。
+ *
+ * @param config 图表配置：legends 图例名称（按 [系列1, 系列2, 系列3] 顺序）、
+ *   units 两个 Y 轴的单位（units[2] 为备选单位）、grid 自定义网格、tooltipUnit 第三个系列的
+ *   tooltip 单位、showDataZoom 是否显示底部缩放条、showAreaStyle 折线是否加面积渐变、
+ *   chartType 前两个系列的图形类型（默认 bar）、colorsList 自定义色板
+ * @param chartData 图表数据：xData 类目轴数据，firstBarData/secondBarData 前两个系列数据，
+ *   lineData 第三个折线系列数据
+ * @returns ECharts option：含 color、dataZoom、grid、tooltip、legend、xAxis、双 yAxis、series
+ */
 export const initBarLineOption = (
   config: ConfigParams,
   chartData: DataParams
@@ -71,8 +116,10 @@ export const initBarLineOption = (
   } = config
   const { xData, firstBarData, secondBarData, lineData } = chartData
   const chartColors = getColorDisk()
+  // 按 option 的渲染层级顺序组装：配色 → 缩放条 → 画布边距 → 提示框 → 图例 → 坐标轴 → 系列
   const option = {
     color: config.colorsList || chartColors,
+    // 底部数据缩放滑块：仅显式开启时创建，关闭时置空数组以移除 ECharts 默认组件
     dataZoom:
       showDataZoom === true
         ? [
@@ -114,6 +161,7 @@ export const initBarLineOption = (
       bottom: '1%',
       containLabel: true
     },
+    // 轴触发提示框：formatter 自行拼 HTML，以便同时展示色块、系列名、数值与单位
     tooltip: {
       trigger: 'axis',
       backgroundColor: getVariable('background-secondary'),
@@ -166,6 +214,7 @@ export const initBarLineOption = (
         return result
       }
     },
+    // 图例顺序必须与 series 一一对应：前两项为方块（柱/线），第三项固定为圆点（折线）
     legend: {
       data: [
         {
@@ -189,6 +238,7 @@ export const initBarLineOption = (
       itemWidth: 8,
       itemHeight: 8
     },
+    // 类目轴：刻度线隐藏，仅保留轴线；axisPointer 为 shadow，悬停时高亮当前类目整列
     xAxis: [
       {
         type: 'category',
@@ -213,12 +263,15 @@ export const initBarLineOption = (
         }
       }
     ],
+    // 双 Y 轴：前两个系列共用左轴（units[0]），折线系列使用右轴（units[1]），两者刻度互相独立
     yAxis: [createBarLineYAxisItem(units[0]), createBarLineYAxisItem(units[1])],
+    // 系列顺序与图例一致；前两个系列按 chartType 切换图形，第三项固定为折线并右轴对齐
     series: [
       {
         name: legends[0],
         type: chartType || 'bar',
         smooth: chartType === 'line',
+        // 柱体使用纵向三段渐变（0.9 → 0.6 → 0），营造底部渐隐的轻量视觉，非业务语义
         itemStyle: {
           color: {
             type: 'linear',
@@ -361,6 +414,15 @@ interface LineChartOptionParams {
     showSymbol?: boolean // 是否显示圆点，默认 false
   }[] // 数据列表,有几条折线就有几个对象
 }
+/**
+ * 构造纯折线图 option（支持多系列、阶梯线、自定义线型与面积渐变）
+ *
+ * @param lineChartOptionParmas 图表参数：
+ *   colorList 可选自定义色板、xAxis 类目轴刻度、unit 唯一 Y 轴单位、grid 画布边距、
+ *   tooltip 整体覆盖提示框、showDataZoom 是否显示缩放条（false 时隐藏）、
+ *   dataZoomStart/dataZoomEnd 缩放区间百分比、dataList 折线系列数组
+ * @returns ECharts option：color、grid、tooltip、legend、dataZoom、单 xAxis、单 yAxis、series
+ */
 export const initLineChartOption = (
   lineChartOptionParmas: LineChartOptionParams
 ) => {
@@ -375,6 +437,7 @@ export const initLineChartOption = (
     dataZoomEnd,
     showDataZoom
   } = lineChartOptionParmas
+  // 未传色板时回落到主题色盘；全部系列按索引顺序循环取色
   const colors = colorList || getColorDisk()
   return {
     color: colors,
@@ -506,6 +569,7 @@ export const initLineChartOption = (
         }
       }
     ],
+    // 逐系列生成折线：阶梯线(smooth=false)、平滑曲线、线型与面积渐变均由 dataList 项控制
     series: dataList.map((item, index) => {
       return {
         name: item.name,
@@ -574,6 +638,18 @@ interface BarChartOptionParams {
     showAreaStyle?: boolean // 是否显示柱状图渐变样式,默认不展示渐变色，按需传参
   }[] // 数据列表,有几条折线就有几个对象
 }
+/**
+ * 构造柱状图 option（支持多系列、堆叠、柱宽限制与顶部渐隐渐变）
+ *
+ * @param barChartOptionParmas 图表参数：
+ *   colorList 自定义色板、xAxis 类目轴刻度、unit 唯一 Y 轴单位、grid 画布边距、
+ *   tooltip 整体覆盖提示框、legendSelected 图例初始选中态、
+ *   tooltipShowTimeRange 是否在提示框头部展示时间区间（如用电量 10:00-11:00）、
+ *   tooltipTimeRangeSubtractMinutes 时间区间起点相对当前点向前偏移的分钟数（默认 15）、
+ *   valueDecimals 数值保留小数位、showDataZoom/dataZoomStart/dataZoomEnd 缩放条配置、
+ *   dataList 柱状系列数组（barMaxWidth 柱最大宽度、stack 堆叠分组、showAreaStyle 是否渐变）
+ * @returns ECharts option：color、grid、tooltip、legend、dataZoom、单 xAxis、单 yAxis、series
+ */
 export const initBarChartOption = (
   barChartOptionParmas: BarChartOptionParams
 ) => {
@@ -593,6 +669,7 @@ export const initBarChartOption = (
     legendSelected
   } = barChartOptionParmas
   const colors = colorList || getColorDisk()
+  // 供 tooltip 计算时间区间起点，抽成局部变量避免 formatter 内重复解构
   const tooltipRangeSubtractM = tooltipTimeRangeSubtractMinutes
   return {
     color: colors,
@@ -743,6 +820,7 @@ export const initBarChartOption = (
         }
       }
     ],
+    // 柱状系列：stack 相同的系列自动堆叠；showAreaStyle 时启用顶部高不透明、底部透明的三段渐变
     series: dataList.map((item, index) => {
       return {
         name: item.name,
@@ -803,6 +881,17 @@ interface PieChartOptionParams {
   /** tooltip 中数值保留小数位数，不传则按原值展示 */
   valueDecimals?: number
 }
+/**
+ * 构造饼图 / 环形图 option
+ *
+ * 空数据处理：饼图只表达正值，若数据全为空、全 0 或全负数，则渲染一个灰色占位环
+ * 并关闭 tooltip，避免出现空白画布或 0 值扇区。
+ *
+ * @param pieChartOptionParmas 图表参数：
+ *   title 系列名（tooltip 标题）、unit 数值单位、radius 半径
+ *   （字符串为实心饼图，['65%','80%'] 形式为环形图）、dataList 扇区数据、valueDecimals 数值小数位
+ * @returns ECharts option：color、tooltip、series（单个 pie 系列，无坐标轴）
+ */
 export const initPieChartOption = (
   pieChartOptionParmas: PieChartOptionParams
 ) => {
@@ -873,6 +962,7 @@ export const initPieChartOption = (
         type: 'pie',
         radius: radius,
         avoidLabelOverlap: false,
+        // 多个扇区之间留 1° 间隙；单扇区（含「暂无数据」占位环）时为 0，避免出现缺口
         padAngle: chartData.length > 1 ? 1 : 0,
         label: {
           show: false,
@@ -976,7 +1066,13 @@ interface LineBarChartOptionParams {
     itemColorCallback?: (value: number, dataIndex: number) => string
   }[] // 数据列表
 }
-/** 创建 Y 轴配置项 */
+/**
+ * 创建数值轴（Y 轴，横向图时即 X 轴）配置项
+ * @param config 轴配置：unit 单位、name 轴名（优先级高于 unit）、min/max 取值范围、
+ *   interval 刻度间隔、splitLineShow 是否显示分割线（默认显示）、
+ *   offset 轴的像素偏移（多轴叠加时用于错开）、axisLineShow 预留开关
+ * @returns ECharts 数值轴配置；min/max/interval/offset 仅在显式传入时才写入，避免覆盖默认自适应
+ */
 const createYAxisItem = (
   config:
     | {
@@ -1019,6 +1115,25 @@ const createYAxisItem = (
   ...(config?.offset !== undefined && { offset: config.offset })
 })
 
+/**
+ * 构造折柱混合图 option（核心通用图表函数）
+ *
+ * 轴模式：
+ * - 竖向（默认）：类目在 X 轴、数值在多条 Y 轴（最多 3 条：leftAxis/rightAxis/farRightAxis）；
+ * - 横向：类目在 Y 轴，原多条 Y 轴转为多条 X 轴（用于长类目名的排行对比）。
+ *
+ * @param lineBarChartOptionParmas 图表参数：
+ *   colorList 色板、xAxis 类目数据、xAxisName/xAxisNameLocation 类目轴名称及位置、
+ *   unit 单轴单位、singleAxisPosition 单轴时 Y 轴位置（默认 left）、
+ *   yAxisConfig 多轴配置（每轴可设 unit/name/min/max/interval）、grid 画布边距、
+ *   tooltip 整体覆盖提示框、legendSelected 图例选中态、
+ *   tooltipShowTimeRange + timeRangeMinutes 提示框时间区间、
+ *   tooltipAbsoluteValues 是否按绝对值展示、valueDecimals 小数位、
+ *   showDataZoom/dataZoomStart/dataZoomEnd 缩放条、orientation 图表方向、legendShow 是否显示图例、
+ *   dataList 系列数组（type 图形类型、yAxisIndex 绑定轴、unit 提示框单位、stack 堆叠、
+ *   itemColorCallback 按数值动态着色）
+ * @returns ECharts option：color、grid、tooltip、legend、dataZoom、xAxis、yAxis、series
+ */
 export const initLineBarChartOption = (
   lineBarChartOptionParmas: LineBarChartOptionParams
 ) => {
@@ -1046,6 +1161,7 @@ export const initLineBarChartOption = (
   } = lineBarChartOptionParmas
 
   const colors = colorList || getColorDisk()
+  // 横向模式下类目轴与数值轴互换，后续所有轴构建逻辑都以此标记分流
   const isHorizontal = orientation === 'horizontal'
   // 检测使用的Y轴数量：根据 dataList 中的 yAxisIndex 和 yAxisConfig 配置决定
   const usedYAxisIndices = new Set(dataList.map((item) => item.yAxisIndex ?? 0))
@@ -1164,7 +1280,7 @@ export const initLineBarChartOption = (
         createYAxisItem({
           ...(yAxisConfig.farRightAxis || {}),
           splitLineShow: false,
-          offset: 30 // 向右偏移40px，避免与第一个右轴重叠
+          offset: 30 // 向右偏移 30px（略大于轴标签宽度），避免与第一条右轴重叠
         })
       )
     }
@@ -1194,6 +1310,7 @@ export const initLineBarChartOption = (
       borderColor: getVariable('primary-light'),
       borderWidth: 1,
       // appendTo: 'body',
+      // 限制提示框在图表画布内，避免靠近容器边缘时超出可视区域被裁切
       confine: true,
       axisPointer: {
         type: 'cross',
@@ -1259,6 +1376,7 @@ export const initLineBarChartOption = (
         return result
       }
     },
+    // 图例：type 为 scroll，系列过多时自动分页；文本超宽用省略号截断
     legend: {
       show: legendShow,
       data: dataList.map((item) => ({
@@ -1323,6 +1441,7 @@ export const initLineBarChartOption = (
           ],
     xAxis: builtXAxis,
     yAxis: builtYAxis,
+    // 系列：折线显式绑定颜色（否则自定义色板会失效），柱状支持按数值回调着色或整体渐变
     series: dataList.map((item, index) => {
       const baseColor = colors[index % colors.length] || colors[0]
       const axisIndex =
@@ -1402,7 +1521,13 @@ export const initLineBarChartOption = (
   }
 }
 
-/** 估算文本宽度（用于判断 X 轴标签是否放得下） */
+/**
+ * 估算文本渲染宽度（用于判断 X 轴标签是否放得下）
+ * 借助 canvas measureText 获取真实字宽，避免不同字体的估算误差。
+ * @param text 待测量的文本（空串返回 0）
+ * @param font canvas 字体简写，默认 12px sans-serif，需与坐标轴标签字号保持一致
+ * @returns 文本宽度（px）；无 canvas 上下文时退化为「字符数 × 8」的粗略估算
+ */
 const measureTextWidth = (text: string, font = '12px sans-serif') => {
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')
@@ -1411,7 +1536,12 @@ const measureTextWidth = (text: string, font = '12px sans-serif') => {
   return ctx.measureText(text).width
 }
 
-/** X 轴标签放不下时再旋转，不按固定个数 */
+/**
+ * 判断 X 轴标签是否需要旋转（按实际文本宽度计算，而非固定类目数量）
+ * @param labels X 轴类目文本数组
+ * @param chartWidth 图表容器宽度（px）
+ * @returns 当单个类目可用宽度小于「最宽标签 + 8px 间距」时返回 true，调用方据此设置 axisLabel.rotate
+ */
 export const needRotateXLabel = (labels: string[], chartWidth: number) => {
   if (!labels.length || chartWidth <= 0) return false
   const maxLabelW = Math.max(...labels.map((l) => measureTextWidth(l || '')))

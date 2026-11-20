@@ -1,4 +1,28 @@
 <script setup lang="ts">
+/**
+ * OrdersView.vue — 运营管理 · 订单管理
+ *
+ * 页面职责：
+ * - 订单统计概览（今日订单量 / 成交金额 / 待处理 / 异常与退款中）与近 7 天趋势图；
+ * - 组合筛选（关键词、用户、日期区间、支付方式、订单状态、配送方式、快捷筛选）；
+ * - 订单列表自定义列显隐（本地持久化）与全链路详情抽屉；
+ * - 订单操作：关闭 / 发货 / 修改地址 / 确认完成 / 退款或部分退款 / 备注与异常标记 / 删除；
+ * - 按当前筛选条件与自选字段导出 CSV。
+ *
+ * 接口来源：`@/api/admin` 的 api.orders / api.orderStats / api.orderDetail /
+ * api.closeOrder / api.shipOrder / api.updateOrderAddress / api.remarkOrder /
+ * api.refundOrder / api.completeOrder / api.deleteOrder，导出直接请求
+ * `/api/admin/orders/export`（需手动携带 Bearer Token）。
+ *
+ * 关键交互：关键词输入 300ms 防抖；筛选变更回到第 1 页；行点击打开详情抽屉；
+ * 所有写操作成功后统一刷新列表、统计与当前详情。
+ *
+ * 权限与状态机约束：
+ * - 只读角色（只读管理员 / 观察员 / 审计员）仅可查看与导出，操作入口整体禁用；
+ * - 订单状态流转：待支付 →（关闭）已关闭；待支付 →（支付）待发货 →（发货）已发货 →
+ *   （确认完成）已完成；除待支付 / 已关闭 / 已退款外均可发起退款，退款按金额区分部分退款与已退款；
+ * - 删除订单不做自动退款，菜单对所有状态展示，删除前需先完成退款流程，最终由后端校验。
+ */
 import {
   AlertCircleOutline,
   CashOutline,
@@ -28,19 +52,23 @@ import { useAuthStore } from '@/stores/auth'
 import { initLineBarChartOption } from '@/utils/chart/initOptionUtils'
 import { money, orderStatusTag, payStatusTag } from '@/utils/tags'
 
-const message = useMessage()
-const dialog = useDialog()
-const auth = useAuthStore()
+const message = useMessage() // Naive UI 轻提示实例
+const dialog = useDialog() // Naive UI 确认对话框实例（退款/删除等二次确认）
+const auth = useAuthStore() // 管理员登录态：用于按角色控制写操作入口
 
 // ---------- 权限 ----------
 // 只读角色仅可查看 / 导出，不能执行订单操作（与后端校验保持一致）
 const READONLY_ROLES = ['只读管理员', '观察员', '审计员']
+// 当前登录角色是否具备订单写操作权限；false 时隐藏/禁用发货、退款、删除等入口
 const canOperate = computed(() => !READONLY_ROLES.includes(auth.role))
 
 // ---------- 统计概览 ----------
+// 订单统计概览；null 表示尚未加载成功，界面显示占位符 “--”
 const stats = ref<OrderStats | null>(null)
+// 统计区加载态，用于「刷新统计」按钮 loading
 const statsLoading = ref(false)
 
+/** 概览 KPI 卡片数据：由统计接口结果派生，统计未就绪时数值降级为 “--” */
 const kpis = computed(() => {
   const s = stats.value
   return [
@@ -51,6 +79,7 @@ const kpis = computed(() => {
   ]
 })
 
+/** 近 7 天趋势图配置：柱状为订单量（左轴/单），折线为成交金额（右轴/元） */
 const chartOption = computed(() => {
   if (!stats.value) return {}
   return initLineBarChartOption({
@@ -69,6 +98,13 @@ const chartOption = computed(() => {
 })
 
 // ---------- 筛选 ----------
+/**
+ * 筛选条件集合（与 OrderQuery 字段一一对应）：
+ * - keyword：订单编号 / 商品名称；userKeyword：用户昵称 / UID / 手机号；
+ * - range：日期区间时间戳 [start, end]，null 表示不限；
+ * - payMethod / status / deliveryType：下拉值，'all' 表示不过滤；
+ * - quick：快捷筛选 key，'' 表示全部订单。
+ */
 const query = reactive({
   keyword: '',
   userKeyword: '',
@@ -79,12 +115,14 @@ const query = reactive({
   quick: '',
 })
 
+// 支付方式下拉：'all' 为全部，其余与后端支付方式文案保持一致
 const payMethodOptions = [
   { label: '全部支付方式', value: 'all' },
   { label: '微信支付', value: '微信支付' },
   { label: '余额支付', value: '余额支付' },
   { label: '积分抵扣', value: '积分抵扣' },
 ]
+// 订单状态下拉：覆盖状态机全部取值，'all' 为全部
 const statusOptions = [
   { label: '全部状态', value: 'all' },
   { label: '待支付', value: '待支付' },
@@ -96,12 +134,14 @@ const statusOptions = [
   { label: '部分退款', value: '部分退款' },
   { label: '已退款', value: '已退款' },
 ]
+// 配送方式下拉：'all' 为全部；发货弹窗复用后两项（slice(1)）
 const deliveryOptions = [
   { label: '全部配送方式', value: 'all' },
   { label: '快递', value: '快递' },
   { label: '自提', value: '自提' },
 ]
 
+/** 快捷筛选按钮：key 对应接口 quick 参数；count 仅对可统计项展示角标 */
 const quickOptions = computed(() => {
   const c = stats.value?.counts
   return [
@@ -115,6 +155,11 @@ const quickOptions = computed(() => {
   ]
 })
 
+/**
+ * 将界面筛选状态转换为接口查询参数。
+ * 空关键词、'all' 选项、空日期区间统一转 undefined，避免后端收到无效条件。
+ * @returns 列表查询与导出共用的 OrderQuery 对象（不含分页）
+ */
 function currentQuery(): OrderQuery {
   return {
     keyword: query.keyword || undefined,
@@ -134,15 +179,27 @@ function onDateChange(v: number | [number, number] | null) {
   resetAndLoad()
 }
 
+/**
+ * 选择快捷时间筛选（全部/今日/近 7 天等）
+ * @param {string} key 快捷项标识，写入 query.quick 参与列表查询
+ */
 function pickQuick(key: string) {
+  // 快捷筛选与下拉筛选可叠加，切换后统一回到第一页
   query.quick = key
   pagination.page = 1
   load()
 }
 
 // ---------- 列表 ----------
+// 当前页订单数据，由 api.orders 返回
 const rows = ref<AdminOrder[]>([])
+// 表格加载态
 const loading = ref(false)
+/**
+ * 分页配置（naive-ui remote 模式）：
+ * - page 当前页（从 1 开始）、pageSize 每页条数、itemCount 服务端总数；
+ * - 翻页 / 修改每页条数后重新请求，修改每页条数时重置到第 1 页。
+ */
 const pagination = reactive({
   page: 1,
   pageSize: 10,
@@ -160,6 +217,10 @@ const pagination = reactive({
   },
 })
 
+/**
+ * 拉取订单列表：按当前筛选条件与分页参数请求，写入 rows 与总数。
+ * 异常由 HTTP 拦截器统一提示，此处仅负责结束 loading。
+ */
 async function load() {
   loading.value = true
   try {
@@ -173,6 +234,7 @@ async function load() {
   }
 }
 
+/** 拉取订单统计概览（KPI 与趋势图共用） */
 async function loadStats() {
   statsLoading.value = true
   try {
@@ -184,12 +246,14 @@ async function loadStats() {
   }
 }
 
+/** 手动刷新：列表与统计概览并行重新加载 */
 function refreshAll() {
   load()
   loadStats()
 }
 
 let kwTimer: ReturnType<typeof setTimeout> | undefined
+/** 关键词输入防抖（300ms）：避免逐字触发请求，触发时回到第 1 页 */
 function onKeyword() {
   clearTimeout(kwTimer)
   kwTimer = setTimeout(() => {
@@ -198,11 +262,13 @@ function onKeyword() {
   }, 300)
 }
 
+/** 筛选条件变化后的重新查询：重置页码为 1 */
 function resetAndLoad() {
   pagination.page = 1
   load()
 }
 
+/** 重置全部筛选条件（含快捷筛选）并回到第 1 页重新查询 */
 function resetFilters() {
   query.keyword = ''
   query.userKeyword = ''
@@ -216,6 +282,7 @@ function resetFilters() {
 }
 
 // ---------- 列显示 / 隐藏（自定义列，选择结果持久化） ----------
+// 可选列清单：key 与 columns 内的可见性判断一一对应，label 为列设置面板文案
 const COLUMN_DEFS = [
   { key: 'no', label: '订单编号' },
   { key: 'user', label: '下单用户' },
@@ -231,9 +298,15 @@ const COLUMN_DEFS = [
   { key: 'logistics', label: '物流信息' },
   { key: 'remark', label: '备注 / 异常' },
 ]
+// localStorage 键名：列偏好按浏览器本地保存，不随账号同步
 const COLUMN_KEY = 'fishai.orders.columns.v1'
+// 当前可见列 key 集合，初始值来自本地偏好
 const visibleKeys = ref<string[]>(loadColumnPrefs())
 
+/**
+ * 读取本地列偏好：解析失败、结构非法或全部 key 失效时回退为全列显示。
+ * @returns 经过合法性过滤后的可见列 key 数组
+ */
 function loadColumnPrefs(): string[] {
   const all = COLUMN_DEFS.map((c) => c.key)
   try {
@@ -246,6 +319,7 @@ function loadColumnPrefs(): string[] {
     return all
   }
 }
+// 列偏好变更后写回 localStorage；隐私模式等写入失败时静默忽略
 watch(visibleKeys, (v) => {
   try {
     localStorage.setItem(COLUMN_KEY, JSON.stringify(v))
@@ -253,8 +327,15 @@ watch(visibleKeys, (v) => {
     /* ignore */
   }
 })
+/** 判断某列当前是否可见 */
 const visible = (key: string) => visibleKeys.value.includes(key)
 
+/**
+ * 解析图片地址：仅放行后端静态上传目录与 http(s) 外链，
+ * 小程序内置资源路径不在此静态服务下，返回空串以渲染占位块。
+ * @param img 后端返回的图片地址，可能为 null
+ * @returns 可用于 <img src> 的地址；不可用时为空串
+ */
 function imgSrc(img: string | null | undefined): string {
   if (!img) return ''
   // 仅展示后端可访问的图片（上传图 / 外链）；小程序内置图片不在此静态目录下
@@ -262,9 +343,14 @@ function imgSrc(img: string | null | undefined): string {
   return ''
 }
 
+/**
+ * 表格列定义：按用户列偏好动态拼装，未勾选的列不生成。
+ * 末尾固定「操作」列（fixed: right），内含详情入口与操作下拉菜单。
+ */
 const columns = computed<DataTableColumns<AdminOrder>>(() => {
   const cols: DataTableColumns<AdminOrder> = []
 
+  // 列：订单编号（主文本编号 + 异常/备注副文本）
   if (visible('no')) {
     cols.push({
       title: '订单编号',
@@ -281,6 +367,7 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
         ]),
     })
   }
+  // 列：下单用户（头像 + 昵称 + UID）
   if (visible('user')) {
     cols.push({
       title: '下单用户',
@@ -296,6 +383,7 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
         ]),
     })
   }
+  // 列：商品信息（缩略图 + 商品名 + 数量）
   if (visible('goods')) {
     cols.push({
       title: '商品信息',
@@ -313,6 +401,7 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
         ]),
     })
   }
+  // 列：订单金额（实付金额 + 商品金额对照）
   if (visible('amount')) {
     cols.push({
       title: '订单金额',
@@ -325,6 +414,7 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
         ]),
     })
   }
+  // 列：抵扣积分（0 / 空值显示 “—”）
   if (visible('usePoints')) {
     cols.push({
       title: '抵扣积分',
@@ -333,9 +423,11 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
       render: (row) => h('span', { class: 'num' }, row.usePoints ? `${row.usePoints}` : '—'),
     })
   }
+  // 列：支付方式（直接展示后端文案）
   if (visible('payMethod')) {
     cols.push({ title: '支付方式', key: 'payMethod', width: 100 })
   }
+  // 列：支付状态（标签色由 payStatusTag 统一映射）
   if (visible('payStatus')) {
     cols.push({
       title: '支付状态',
@@ -349,6 +441,7 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
         ),
     })
   }
+  // 列：订单状态（标签色由 orderStatusTag 统一映射）
   if (visible('status')) {
     cols.push({
       title: '订单状态',
@@ -362,9 +455,11 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
         ),
     })
   }
+  // 列：配送方式（快递 / 自提）
   if (visible('deliveryType')) {
     cols.push({ title: '配送方式', key: 'deliveryType', width: 90 })
   }
+  // 列：收货信息（收货人 + 电话 + 地址，地址超长省略并悬浮显示全文）
   if (visible('receiver')) {
     cols.push({
       title: '收货信息',
@@ -377,6 +472,7 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
         ]),
     })
   }
+  // 列：下单时间
   if (visible('createdAt')) {
     cols.push({
       title: '下单时间',
@@ -385,6 +481,7 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
       render: (row) => h('span', { class: 'num td-s', style: 'margin-top:0' }, row.createdAt || '--'),
     })
   }
+  // 列：物流信息（物流公司 + 运单号；未发货时显示 “—”）
   if (visible('logistics')) {
     cols.push({
       title: '物流信息',
@@ -399,6 +496,7 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
           : h('span', { class: 'td-s', style: 'margin-top:0' }, '—'),
     })
   }
+  // 列：备注 / 异常（异常标签 + 备注文本）
   if (visible('remark')) {
     cols.push({
       title: '备注 / 异常',
@@ -418,6 +516,7 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
     })
   }
 
+  // 固定操作列：详情按钮 + 操作下拉（无权限时下拉禁用）；阻止冒泡避免触发行点击
   cols.push({
     title: '操作',
     key: 'actions',
@@ -441,30 +540,58 @@ const columns = computed<DataTableColumns<AdminOrder>>(() => {
   return cols
 })
 
+/**
+ * 根据订单当前状态生成可用操作菜单（与后端状态机校验一致）：
+ * - 待支付：可关闭；
+ * - 待发货：可发货、改地址；
+ * - 已发货：可改地址、确认完成；
+ * - 非（待支付 / 已关闭 / 已退款）状态可发起退款；
+ * - 备注与删除对所有状态开放。
+ * @param row 当前操作行订单
+ * @returns naive-ui 下拉菜单项数组
+ */
 function actionOptions(row: AdminOrder): DropdownOption[] {
   const opts: DropdownOption[] = []
+  // 待支付订单可关闭，关闭后用户无法继续支付
   if (row.status === '待支付') opts.push({ label: '关闭订单', key: 'close' })
+  // 待发货订单进入发货流程
   if (row.status === '待发货') opts.push({ label: '发货', key: 'ship' })
+  // 待发货 / 已发货允许在签收前修改收货地址
   if (row.status === '待发货' || row.status === '已发货') opts.push({ label: '修改收货地址', key: 'address' })
+  // 已发货订单可人工确认完成
   if (row.status === '已发货') opts.push({ label: '确认完成', key: 'complete' })
+  // 退款：待支付 / 已关闭 / 已退款无退款语义，其余状态开放（含部分退款）
   if (!['待支付', '已关闭', '已退款'].includes(row.status)) opts.push({ label: '退款 / 部分退款', key: 'refund' })
+  // 备注与异常标记、删除对所有状态开放（删除由后端做最终校验）
   opts.push({ label: '备注 / 异常标记', key: 'remark' })
   opts.push({ label: '删除订单', key: 'delete' })
   return opts
 }
 
 // ---------- 详情抽屉 ----------
+// 抽屉显隐
 const drawerShow = ref(false)
+// 当前详情对应的订单编号，用于操作后判断是否需要刷新详情
 const detailNo = ref('')
+// 详情数据；null 表示未加载或已清空
 const detail = ref<AdminOrderDetail | null>(null)
+// 详情加载态，展示骨架屏
 const detailLoading = ref(false)
 
+/**
+ * 打开详情抽屉：先展示抽屉再异步加载详情，避免点击无反馈。
+ * @param row 列表行订单（使用其 no 查询详情）
+ */
 async function openDetail(row: AdminOrder) {
   drawerShow.value = true
   detailNo.value = row.no
   await loadDetail(row.no)
 }
 
+/**
+ * 加载订单全链路详情。
+ * @param no 订单编号
+ */
 async function loadDetail(no: string) {
   detailLoading.value = true
   try {
@@ -476,6 +603,11 @@ async function loadDetail(no: string) {
   }
 }
 
+/**
+ * 详情抽屉底部按钮：复用列表操作菜单，并为退款/删除标记危险色、发货标记主色。
+ * @param row 详情订单
+ * @returns 带 type 的按钮配置
+ */
 function detailActions(row: AdminOrder) {
   return actionOptions(row).map((o) => ({
     key: String(o.key),
@@ -487,17 +619,35 @@ function detailActions(row: AdminOrder) {
   }))
 }
 
+/** 抽屉内操作入口：统一交给 onAction 处理 */
 function onDetailAction(key: string) {
   if (detail.value) onAction(key, detail.value)
 }
 
 // ---------- 操作 ----------
+/**
+ * 写操作成功后的统一收尾：
+ * 1. 提示成功文案；
+ * 2. 并行刷新列表与统计；
+ * 3. 若详情抽屉正展示同一订单，同步刷新详情。
+ * @param no 订单编号
+ * @param tip 成功提示文案
+ */
 async function afterMutation(no: string, tip: string) {
   message.success(tip)
   await Promise.allSettled([load(), loadStats()])
   if (drawerShow.value && detailNo.value === no) await loadDetail(no)
 }
 
+/**
+ * 订单操作统一分发入口：
+ * - 先做前端权限兜底（无权限直接提示并返回）；
+ * - close / complete 走二次确认弹窗；
+ * - ship / address / remark / refund 打开对应表单弹窗；
+ * - delete 二次确认后删除，若删除的是当前详情订单则关闭抽屉。
+ * @param key 操作标识，见 actionOptions
+ * @param row 目标订单
+ */
 function onAction(key: string, row: AdminOrder) {
   if (!canOperate.value) {
     message.warning('当前角色无订单操作权限')
@@ -574,6 +724,7 @@ function onAction(key: string, row: AdminOrder) {
 }
 
 // 发货
+// 发货弹窗表单：物流公司可选项与手输、运单号必填；deliveryType 默认按订单原配送方式回填
 const ship = reactive({
   show: false,
   no: '',
@@ -582,10 +733,15 @@ const ship = reactive({
   deliveryType: '快递',
   saving: false,
 })
+// 常用快递公司候选（下拉可搜索、可自定义输入）
 const expressOptions = ['顺丰速运', '中通快递', '圆通速递', '韵达快递', '京东物流', '邮政EMS', '极兔速递'].map(
   (v) => ({ label: v, value: v }),
 )
 
+/**
+ * 打开发货弹窗：以订单已有物流信息回填，便于补录或修正。
+ * @param row 待发货订单
+ */
 function openShip(row: AdminOrder) {
   ship.no = row.no
   ship.company = row.logisticsCompany || '顺丰速运'
@@ -594,6 +750,10 @@ function openShip(row: AdminOrder) {
   ship.show = true
 }
 
+/**
+ * 提交发货：前端校验物流公司与运单号非空，
+ * 成功后关闭弹窗并走统一刷新（订单进入已发货状态）。
+ */
 async function submitShip() {
   if (!ship.company.trim() || !ship.logisticsNo.trim()) {
     message.warning('请填写物流公司与运单号')
@@ -616,8 +776,13 @@ async function submitShip() {
 }
 
 // 修改地址
+// 收货信息编辑表单：打开时以订单当前收货信息回填
 const addr = reactive({ show: false, no: '', receiver: '', phone: '', address: '', saving: false })
 
+/**
+ * 打开修改地址弹窗并回填当前收货信息。
+ * @param row 待发货 / 已发货订单
+ */
 function openAddress(row: AdminOrder) {
   addr.no = row.no
   addr.receiver = row.receiver || ''
@@ -626,6 +791,9 @@ function openAddress(row: AdminOrder) {
   addr.show = true
 }
 
+/**
+ * 提交收货地址修改：收货人 / 电话 / 地址三项均必填，去除首尾空格后提交。
+ */
 async function submitAddress() {
   if (!addr.receiver.trim() || !addr.phone.trim() || !addr.address.trim()) {
     message.warning('请完整填写收货人、电话与地址')
@@ -648,8 +816,13 @@ async function submitAddress() {
 }
 
 // 备注 / 异常
+// 运营备注表单：text 为跟进记录，abnormal 标记后可在「异常订单」快捷筛选中定位
 const remark = reactive({ show: false, no: '', text: '', abnormal: false, saving: false })
 
+/**
+ * 打开备注弹窗并回填已有备注与异常标记。
+ * @param row 目标订单
+ */
 function openRemark(row: AdminOrder) {
   remark.no = row.no
   remark.text = row.remark || ''
@@ -657,6 +830,7 @@ function openRemark(row: AdminOrder) {
   remark.show = true
 }
 
+/** 保存运营备注与异常标记（备注允许为空，仅更新异常标记） */
 async function submitRemark() {
   remark.saving = true
   try {
@@ -671,8 +845,13 @@ async function submitRemark() {
 }
 
 // 退款
+// 退款弹窗表单：max 为实付金额上限；approve=true 表示通过退款，false 表示驳回申请
 const refund = reactive({ show: false, no: '', amount: 0, max: 0, reason: '', approve: true, saving: false })
 
+/**
+ * 打开退款弹窗：退款金额默认等于实付金额（即全额退款），可下调为部分退款。
+ * @param row 可退款订单
+ */
 function openRefund(row: AdminOrder) {
   refund.no = row.no
   refund.max = row.amount
@@ -682,6 +861,12 @@ function openRefund(row: AdminOrder) {
   refund.show = true
 }
 
+/**
+ * 提交退款处理：
+ * 1. 通过退款时校验金额 > 0 且不超过实付金额；
+ * 2. 金额等于实付为全额退款，小于实付为部分退款；
+ * 3. 驳回申请时金额传 0，仅记录原因。
+ */
 async function submitRefund() {
   if (refund.approve && (!refund.amount || refund.amount <= 0)) {
     message.warning('请输入退款金额')
@@ -708,6 +893,7 @@ async function submitRefund() {
 }
 
 // ---------- 导出 ----------
+// 可导出字段清单：value 与后端 CSV 列 key 对应，默认全选
 const EXPORT_FIELDS: { value: string; label: string }[] = [
   { value: 'no', label: '订单编号' },
   { value: 'user', label: '下单用户' },
@@ -733,10 +919,21 @@ const EXPORT_FIELDS: { value: string; label: string }[] = [
   { value: 'paidAt', label: '支付时间' },
   { value: 'shippedAt', label: '发货时间' },
 ]
+// 导出配置弹窗显隐
 const exportShow = ref(false)
+// 导出请求进行中，控制按钮 loading
 const exporting = ref(false)
+// 已勾选的导出字段，默认选中全部
 const exportFields = ref<string[]>(EXPORT_FIELDS.map((f) => f.value))
 
+/**
+ * 执行导出：
+ * 1. 校验至少选择一个字段；
+ * 2. 将当前筛选条件与字段列表拼为查询串；
+ * 3. 携带 Bearer Token 请求导出接口，取回 Blob 后触发浏览器下载；
+ * 4. 下载使用的临时对象 URL 及时回收。
+ * @throws 导出接口非 2xx 时抛出，由本函数捕获并提示
+ */
 async function doExport() {
   if (!exportFields.value.length) {
     message.warning('请至少选择一个导出字段')
@@ -774,13 +971,16 @@ async function doExport() {
   }
 }
 
+/** 导出字段全选 */
 function selectAllExport() {
   exportFields.value = EXPORT_FIELDS.map((f) => f.value)
 }
+/** 清空导出字段选择（导出按钮随之禁用） */
 function clearExport() {
   exportFields.value = []
 }
 
+// 首屏加载：列表与统计并行请求
 onMounted(() => {
   load()
   loadStats()
@@ -789,6 +989,7 @@ onMounted(() => {
 
 <template>
   <div class="page">
+    <!-- 区块：页头 / 标题 + 描述在左，统计刷新与导出入口在右；导出不受只读角色限制 -->
     <div class="pagehead">
       <div>
         <h2 class="pagehead__title">订单管理</h2>
@@ -808,7 +1009,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 统计概览 -->
+    <!-- 区块：统计概览 / 4 列等宽 KPI 卡片，数据来自 orderStats；未加载时显示 “--” -->
     <div class="kpi-grid">
       <div v-for="k in kpis" :key="k.label" class="kpi" :class="k.cls">
         <div class="kpi__label">
@@ -820,6 +1021,7 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- 区块：近 7 天趋势 / 卡片内左轴订单量柱状 + 右轴成交金额折线，高度固定 210px -->
     <div class="card orders-chart">
       <div class="card__hd">
         <span class="card__title">近 7 天订单趋势</span>
@@ -830,7 +1032,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 快捷筛选 -->
+    <!-- 区块：快捷筛选 / 横向胶囊按钮，单选；count 角标仅对统计接口提供的维度展示 -->
     <div class="order-quick">
       <button
         v-for="q in quickOptions"
@@ -844,7 +1046,7 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- 组合筛选 -->
+    <!-- 区块：组合筛选栏 / 关键词与用户输入走防抖，下拉与日期变更立即查询；右侧为列设置与刷新 -->
     <div class="toolbar">
       <n-input
         v-model:value="query.keyword"
@@ -895,6 +1097,7 @@ onMounted(() => {
       </n-button>
     </div>
 
+    <!-- 区块：订单表格 / remote 分页，行点击打开详情；操作列阻止冒泡避免误触 -->
     <div class="card">
       <n-data-table
         :columns="columns"
@@ -909,11 +1112,12 @@ onMounted(() => {
       />
     </div>
 
-    <!-- 订单详情 -->
+    <!-- 区块：订单详情抽屉 / 右侧 760px；加载中显示骨架屏，底部操作按钮仅对有权限角色展示 -->
     <n-drawer v-model:show="drawerShow" :width="760" placement="right">
       <n-drawer-content title="订单详情" closable>
         <n-skeleton v-if="detailLoading" :repeat="8" text />
         <template v-else-if="detail">
+          <!-- 详情头部：订单编号 + 状态/支付/异常/退款驳回标签 + 右侧实付金额 -->
           <div class="od-head">
             <div>
               <div class="od-no num">{{ detail.no }}</div>
@@ -934,6 +1138,7 @@ onMounted(() => {
             </div>
           </div>
 
+          <!-- 详情分区：订单基础信息（编号与各状态时间节点） -->
           <div class="od-title">订单信息</div>
           <n-descriptions bordered size="small" :column="2" label-placement="left">
             <n-descriptions-item label="订单编号">{{ detail.no }}</n-descriptions-item>
@@ -946,6 +1151,7 @@ onMounted(() => {
             <n-descriptions-item label="关闭时间">{{ detail.closedAt || '--' }}</n-descriptions-item>
           </n-descriptions>
 
+          <!-- 详情分区：用户与收货信息（地址跨两列展示） -->
           <div class="od-title">用户与收货信息</div>
           <n-descriptions bordered size="small" :column="2" label-placement="left">
             <n-descriptions-item label="下单用户">
@@ -957,6 +1163,7 @@ onMounted(() => {
             <n-descriptions-item label="收货地址" :span="2">{{ detail.address || '--' }}</n-descriptions-item>
           </n-descriptions>
 
+          <!-- 详情分区：商品明细表格（单价 / 数量 / 小计） -->
           <div class="od-title">商品明细</div>
           <n-table size="small" :bordered="false">
             <thead>
@@ -987,6 +1194,7 @@ onMounted(() => {
             </tbody>
           </n-table>
 
+          <!-- 详情分区：优惠抵扣与金额明细（积分抵扣推算优惠额，退款原因按需展示） -->
           <div class="od-title">优惠抵扣与金额明细</div>
           <n-descriptions bordered size="small" :column="2" label-placement="left">
             <n-descriptions-item label="商品金额">{{ money(detail.total) }}</n-descriptions-item>
@@ -1002,6 +1210,7 @@ onMounted(() => {
             </n-descriptions-item>
           </n-descriptions>
 
+          <!-- 详情分区：支付记录与物流跟踪（含运营备注） -->
           <div class="od-title">支付记录与物流跟踪</div>
           <n-descriptions bordered size="small" :column="2" label-placement="left">
             <n-descriptions-item label="支付方式">{{ detail.payMethod || '--' }}</n-descriptions-item>
@@ -1012,6 +1221,7 @@ onMounted(() => {
             <n-descriptions-item label="运营备注" :span="2">{{ detail.remark || '--' }}</n-descriptions-item>
           </n-descriptions>
 
+          <!-- 详情分区：订单操作日志时间线；关闭/退款标红、完成标绿，无日志时展示空态 -->
           <div class="od-title">订单操作日志</div>
           <n-timeline v-if="detail.logs.length">
             <n-timeline-item
@@ -1041,7 +1251,7 @@ onMounted(() => {
       </n-drawer-content>
     </n-drawer>
 
-    <!-- 发货 -->
+    <!-- 弹窗：发货 / 单列表单，配送方式复用下拉选项；物流公司与运单号必填，提交成功后订单转已发货 -->
     <n-modal v-model:show="ship.show" preset="card" title="订单发货" style="width: 520px" :mask-closable="false">
       <n-form label-placement="top">
         <n-form-item label="订单编号">
@@ -1065,7 +1275,7 @@ onMounted(() => {
       </template>
     </n-modal>
 
-    <!-- 修改收货地址 -->
+    <!-- 弹窗：修改收货地址 / 收货人与电话双列（form-grid），地址整行文本域；三项均必填 -->
     <n-modal v-model:show="addr.show" preset="card" title="修改收货地址" style="width: 560px" :mask-closable="false">
       <n-form label-placement="top">
         <n-form-item label="订单编号">
@@ -1091,7 +1301,7 @@ onMounted(() => {
       </template>
     </n-modal>
 
-    <!-- 备注 / 异常 -->
+    <!-- 弹窗：备注 / 异常 / 备注文本域带字数统计；异常开关影响列表异常标签与快捷筛选命中 -->
     <n-modal v-model:show="remark.show" preset="card" title="订单备注与异常标记" style="width: 520px" :mask-closable="false">
       <n-form label-placement="top">
         <n-form-item label="订单编号">
@@ -1113,7 +1323,7 @@ onMounted(() => {
       </template>
     </n-modal>
 
-    <!-- 退款 -->
+    <!-- 弹窗：退款处理 / 先选「通过退款」或「驳回申请」，通过时金额输入上限为实付金额 -->
     <n-modal v-model:show="refund.show" preset="card" title="退款 / 部分退款处理" style="width: 560px" :mask-closable="false">
       <n-form label-placement="top">
         <n-form-item label="订单编号">
@@ -1145,7 +1355,7 @@ onMounted(() => {
       </template>
     </n-modal>
 
-    <!-- 导出 -->
+    <!-- 弹窗：导出 / 三列字段多选网格，默认全选；未选字段时导出按钮禁用 -->
     <n-modal v-model:show="exportShow" preset="card" title="导出订单" style="width: 620px" :mask-closable="false">
       <p class="td-s" style="margin: 0 0 12px">
         将按当前筛选条件导出（最多 10000 条），文件为 Excel 可直接打开的 CSV（含 UTF-8 BOM）。
@@ -1175,10 +1385,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* 趋势图卡片与下方快捷筛选之间的间距 */
 .orders-chart {
   margin-bottom: 14px;
 }
 
+/* 快捷筛选：横向自动换行排列，窄屏下折行而不溢出 */
 .order-quick {
   display: flex;
   flex-wrap: wrap;
@@ -1186,6 +1398,7 @@ onMounted(() => {
   margin-bottom: 14px;
 }
 
+/* 快捷筛选胶囊：圆角 999px，hover 与选中态分别高亮边框与底色 */
 .order-quick__btn {
   display: inline-flex;
   align-items: center;
@@ -1212,6 +1425,7 @@ onMounted(() => {
   font-weight: 600;
 }
 
+/* 数量角标：最小宽度 18px，不足两位时保持圆形视觉 */
 .order-quick__badge {
   min-width: 18px;
   height: 18px;
@@ -1224,6 +1438,7 @@ onMounted(() => {
   text-align: center;
 }
 
+/* 列设置面板：两列网格，缩短弹层高度 */
 .col-pref {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1231,6 +1446,7 @@ onMounted(() => {
   padding: 4px 2px;
 }
 
+/* 单元格文本省略：块级 + 单行截断，需父容器限制宽度 */
 .ellipsis {
   display: block;
   max-width: 100%;
@@ -1239,6 +1455,7 @@ onMounted(() => {
   text-overflow: ellipsis;
 }
 
+/* 详情头部：左右两端对齐，金额区不参与收缩 */
 .od-head {
   display: flex;
   align-items: flex-start;
@@ -1256,6 +1473,7 @@ onMounted(() => {
   color: var(--c-ink);
 }
 
+/* 状态标签行：自动换行，窄抽屉下不挤压编号 */
 .od-tags {
   display: flex;
   flex-wrap: wrap;
@@ -1287,12 +1505,14 @@ onMounted(() => {
   color: var(--c-ink);
 }
 
+/* 抽屉底部操作按钮：自动换行排列 */
 .od-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
+/* 弹窗底部按钮：右对齐，取消在左、主操作在右 */
 .modal-foot {
   display: flex;
   justify-content: flex-end;
@@ -1306,6 +1526,7 @@ onMounted(() => {
   margin-bottom: 8px;
 }
 
+/* 导出字段网格：固定三列，字段较多时纵向滚动由弹窗内容区承担 */
 .export-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -8,6 +8,12 @@
  *
  * 功能：统计看板 / 列表筛选 / 详情 / 手动刷新（天气）/ 删除（单条、批量）。
  * 高危操作仅超级管理员可见，普通管理员只读。
+ *
+ * 接口来源：@/api/admin 中的 /admin/cache* 系列接口，实体类型为 CacheItem / FishCacheItem / CacheStats。
+ * 关键交互：切换 Tab 加载对应列表；关键字与日期输入 300ms 防抖；筛选变更回到第 1 页重新查询；
+ *           批量刷新与批量删除均需二次确认。
+ * 限制：批量操作只作用于当前已勾选行（列表刷新后会剔除不在当前页的选中项），前端未限制条数；
+ *       天气缓存支持手动刷新，鱼情缓存仅支持删除，删除后由下一次查询重新调用大模型。
  */
 import {
   RefreshOutline,
@@ -36,23 +42,38 @@ import { computed, h, onMounted, reactive, ref } from 'vue'
 import { api, type CacheItem, type CacheQuery, type CacheStats, type FishCacheItem } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
 
+/**
+ * 生成文本省略渲染：超出容器宽度时以省略号截断，用于表格长文本列。
+ * @param text 需要展示的原始文本
+ * @returns 包裹 NEllipsis 的 VNode，最大宽度受单元格约束
+ */
 function ellipsis(text: string) {
   return h(NEllipsis, { style: 'max-width: 100%' }, { default: () => text })
 }
 
-const message = useMessage()
-const dialog = useDialog()
-const auth = useAuthStore()
+const message = useMessage() // 轻提示（成功/警告）
+const dialog = useDialog() // 二次确认弹窗
+const auth = useAuthStore() // 当前登录管理员信息，用于判断权限
+// 是否超级管理员：只有超管可见刷新/删除入口，普通管理员只读
 const isSuper = computed(() => auth.role === '超级管理员')
 
+// 当前激活的缓存类型 Tab：weather=天气缓存，fish=鱼情缓存；默认天气，切换时加载对应列表
 const cacheType = ref<'weather' | 'fish'>('weather')
+// 列表加载态，两个 Tab 共用，请求期间显示表格 loading 与遮罩
 const loading = ref(false)
+// 统计看板数据（总量/占用空间/命中率/趋势），null 表示尚未加载、不渲染看板
 const stats = ref<CacheStats | null>(null)
 
 // ---------- 天气缓存 ----------
+// 当前页天气缓存条目，由 api.cacheList 返回
 const rows = ref<CacheItem[]>([])
+// 已勾选条目的 id 集合；列表刷新后会剔除已不在当前页的 id，避免跨页误操作
 const checkedKeys = ref<number[]>([])
+// 天气缓存筛选条件：keyword 匹配标准地址或缓存键，status=all|active|expired，
+// source=all|qweather|llm|fallback，日期区间为 YYYY-MM-DD 字符串，空串表示不限
 const query = reactive({ keyword: '', status: 'all', source: 'all', startDate: '', endDate: '' })
+// 分页配置（remote 模式）：页码范围从 1 开始，pageSize 可选 10/20/50；
+// 切换页码或页大小时重新请求；总数由接口 total 回填
 const pagination = reactive({
   page: 1,
   pageSize: 10,
@@ -71,9 +92,13 @@ const pagination = reactive({
 })
 
 // ---------- 鱼情缓存 ----------
+// 当前页鱼情缓存条目，由 api.fishCacheList 返回
 const fishRows = ref<FishCacheItem[]>([])
+// 鱼情缓存已勾选条目 id 集合（仅用于批量删除）
 const fishCheckedKeys = ref<number[]>([])
+// 鱼情缓存筛选条件：keyword 同时匹配查询地址、缓存键与参数；source=all|llm|rule
 const fishQuery = reactive({ keyword: '', status: 'all', source: 'all', startDate: '', endDate: '' })
+// 鱼情缓存分页配置，结构与天气缓存一致，独立维护避免两个列表互相干扰
 const fishPagination = reactive({
   page: 1,
   pageSize: 10,
@@ -91,6 +116,13 @@ const fishPagination = reactive({
   },
 })
 
+/**
+ * 将界面筛选条件转换为接口查询参数，空日期转为 undefined，避免后端解析空字符串失败。
+ * @param source 筛选条件对象（keyword/status/source/startDate/endDate）
+ * @param page 页码，从 1 开始
+ * @param pageSize 每页条数
+ * @returns 符合 CacheQuery 的请求参数
+ */
 function buildParams(
   source: { keyword: string; status: string; source: string; startDate: string; endDate: string },
   page: number,
@@ -107,7 +139,12 @@ function buildParams(
   }
 }
 
+// 关键字/日期输入的防抖定时器句柄：300ms 内的连续输入只触发最后一次查询
 let timer: ReturnType<typeof setTimeout> | undefined
+/**
+ * 关键字与日期输入的防抖处理：延迟 300ms 后按当前 Tab 回到第 1 页重新加载，
+ * 避免逐字符请求接口造成列表抖动与无效查询。
+ */
 function onKeyword() {
   clearTimeout(timer)
   timer = setTimeout(() => {
@@ -121,6 +158,11 @@ function onKeyword() {
   }, 300)
 }
 
+/**
+ * 加载天气缓存列表（服务端分页）。
+ * 成功后同步总数，并把 checkedKeys 限定在当前页返回的 id 内，防止跨页误删。
+ * 请求异常由 http 拦截器统一提示，这里仅负责复位 loading。
+ */
 async function load() {
   loading.value = true
   try {
@@ -134,6 +176,10 @@ async function load() {
   }
 }
 
+/**
+ * 加载鱼情缓存列表（服务端分页），逻辑与天气缓存一致：
+ * 回填总数并清理已不在当前页的勾选项。
+ */
 async function loadFish() {
   loading.value = true
   try {
@@ -149,10 +195,12 @@ async function loadFish() {
   }
 }
 
+/** 加载统计看板数据（缓存总量、占用空间、命中率、近 7 天趋势）。 */
 async function loadStats() {
   stats.value = await api.cacheStats()
 }
 
+/** 筛选条件变化后回到第 1 页并按当前 Tab 重新加载，保证分页与筛选结果一致。 */
 function resetAndLoad() {
   if (cacheType.value === 'weather') {
     pagination.page = 1
@@ -163,51 +211,68 @@ function resetAndLoad() {
   }
 }
 
+/** Tab 切换时加载对应缓存列表；两个列表各自保留分页与筛选状态。 */
 function onTypeChange() {
   if (cacheType.value === 'weather') load()
   else loadFish()
 }
 
+// 状态筛选选项：与后端 status 字段取值一一对应（active=有效，expired=已过期）
 const statusOptions = [
   { label: '全部状态', value: 'all' },
   { label: '有效', value: 'active' },
   { label: '已过期', value: 'expired' },
 ]
+// 天气缓存来源选项：qweather=和风天气，llm=大模型，fallback=兜底/规则
 const sourceOptions = [
   { label: '全部来源', value: 'all' },
   { label: '和风天气', value: 'qweather' },
   { label: '大模型', value: 'llm' },
   { label: '兜底/规则', value: 'fallback' },
 ]
+// 鱼情缓存来源选项：llm=大模型，rule=规则引擎
 const fishSourceOptions = [
   { label: '全部来源', value: 'all' },
   { label: '大模型', value: 'llm' },
   { label: '规则引擎', value: 'rule' },
 ]
 
+/** 来源标识转为中文短标签；未知来源原样返回，避免展示空白。 */
 const sourceText = (s: string) =>
   ({ qweather: '和风', llm: '大模型', fallback: '兜底', rule: '规则' } as Record<string, string>)[s] || s
 
+/**
+ * 计算趋势柱高度百分比，用于近 7 天命中趋势图。
+ * @param n 当前柱的数值
+ * @param arr 全部柱数值，用于取最大值做归一化
+ * @returns 6%~100% 的 CSS 高度字符串（最小 6%，保证低值仍可见）
+ */
 function barHeight(n: number, arr: number[]): string {
   const max = Math.max(1, ...arr)
   return Math.max(6, Math.round((n / max) * 100)) + '%'
 }
 
+// 天气缓存表格列（remote 服务端分页）：长文本统一走 ellipsis，时间/数值使用等宽字体样式
 const columns: DataTableColumns<CacheItem> = [
+  // 多选列：勾选结果与 checkedKeys 双向绑定，驱动批量刷新/删除
   { type: 'selection' },
+  // 缓存键（cacheKey）：标准化地址 + 日期生成的唯一键，超长省略
   {
     title: '缓存键',
     key: 'cacheKey',
     width: 200,
     render: (row) => h('span', { class: 'num' }, ellipsis(row.cacheKey)),
   },
+  // 标准地址（region）：标准化后的查询地址，超长省略
   {
     title: '标准地址',
     key: 'region',
     width: 160,
     render: (row) => ellipsis(row.region),
   },
+  // 日期（day）：缓存对应的天气日期
   { title: '日期', key: 'day', width: 110, render: (row) => h('span', { class: 'num' }, row.day) },
+  // 来源（source）：和风天气用绿色标签，其余来源用默认标签
   {
     title: '来源',
     key: 'source',
@@ -219,8 +284,11 @@ const columns: DataTableColumns<CacheItem> = [
         { default: () => sourceText(row.source) },
       ),
   },
+  // 生成时间（createdAt）：缓存写入时间，缺失展示 —
   { title: '生成时间', key: 'createdAt', width: 150, render: (row) => h('span', { class: 'td-s' }, row.createdAt ?? '—') },
+  // 过期时间（expireAt）：超过该时间即视为过期，缺失展示 —
   { title: '过期时间', key: 'expireAt', width: 150, render: (row) => h('span', { class: 'td-s' }, row.expireAt ?? '—') },
+  // 状态（status）：active 显示绿色「有效」，其余视为「已过期」并使用警告色
   {
     title: '状态',
     key: 'status',
@@ -237,14 +305,18 @@ const columns: DataTableColumns<CacheItem> = [
         { default: () => (row.status === 'active' ? '有效' : '已过期') },
       ),
   },
+  // 大小（sizeKb）：单条缓存占用空间，单位 KB
   { title: '大小', key: 'sizeKb', width: 90, render: (row) => h('span', { class: 'num' }, row.sizeKb + ' KB') },
+  // 命中（hitCount）：该缓存被读取的次数，用于评估缓存收益
   { title: '命中', key: 'hitCount', width: 70, render: (row) => h('span', { class: 'num' }, row.hitCount) },
+  // 天气摘要（condition/temp）：天气现象与当前温度拼接展示，缺失显示 —
   {
     title: '天气摘要',
     key: 'condition',
     width: 150,
     render: (row) => h('span', { class: 'td-s' }, `${row.condition ?? '—'} ${row.temp != null ? row.temp + '°C' : ''}`),
   },
+  // 操作列：详情所有人可见；刷新/删除仅超管，列宽随权限变化并固定右侧
   {
     title: '操作',
     key: 'actions',
@@ -271,21 +343,27 @@ const columns: DataTableColumns<CacheItem> = [
   },
 ]
 
+// 鱼情缓存表格列：展示分析结果摘要，字段口径与天气表一致
 const fishColumns: DataTableColumns<FishCacheItem> = [
+  // 多选列：勾选结果与 fishCheckedKeys 双向绑定，驱动批量删除
   { type: 'selection' },
+  // 缓存键（cacheKey）：全部查询参数的哈希值，超长省略
   {
     title: '缓存键',
     key: 'cacheKey',
     width: 220,
     render: (row) => h('span', { class: 'num' }, ellipsis(row.cacheKey)),
   },
+  // 查询地址（region）：发起鱼情分析时的地区，超长省略
   {
     title: '查询地址',
     key: 'region',
     width: 170,
     render: (row) => ellipsis(row.region),
   },
+  // 日期（day）：分析对应的日期，缺失展示 —
   { title: '日期', key: 'day', width: 110, render: (row) => h('span', { class: 'num' }, row.day ?? '—') },
+  // 来源（source）：大模型结果用绿色标签，规则引擎用默认标签
   {
     title: '来源',
     key: 'source',
@@ -297,6 +375,7 @@ const fishColumns: DataTableColumns<FishCacheItem> = [
         { default: () => sourceText(row.source) },
       ),
   },
+  // 鱼情评分（score）：0~100 分，缺失展示 —
   {
     title: '鱼情评分',
     key: 'score',
@@ -304,14 +383,18 @@ const fishColumns: DataTableColumns<FishCacheItem> = [
     render: (row) =>
       h('span', { class: 'num' }, row.score != null ? `${row.score} 分` : '—'),
   },
+  // 研判结论（verdict）：如「适宜出钓」等短语结论，缺失展示 —
   {
     title: '研判结论',
     key: 'verdict',
     width: 120,
     render: (row) => h('span', { class: 'td-s' }, row.verdict ?? '—'),
   },
+  // 生成时间（createdAt）：缓存写入时间，缺失展示 —
   { title: '生成时间', key: 'createdAt', width: 150, render: (row) => h('span', { class: 'td-s' }, row.createdAt ?? '—') },
+  // 过期时间（expireAt）：超过该时间即视为过期，缺失展示 —
   { title: '过期时间', key: 'expireAt', width: 150, render: (row) => h('span', { class: 'td-s' }, row.expireAt ?? '—') },
+  // 状态（status）：active 显示绿色「有效」，其余视为「已过期」并使用警告色
   {
     title: '状态',
     key: 'status',
@@ -328,8 +411,11 @@ const fishColumns: DataTableColumns<FishCacheItem> = [
         { default: () => (row.status === 'active' ? '有效' : '已过期') },
       ),
   },
+  // 大小（sizeKb）：单条缓存占用空间，单位 KB
   { title: '大小', key: 'sizeKb', width: 90, render: (row) => h('span', { class: 'num' }, row.sizeKb + ' KB') },
+  // 命中（hitCount）：该缓存被读取的次数，用于评估缓存收益
   { title: '命中', key: 'hitCount', width: 70, render: (row) => h('span', { class: 'num' }, row.hitCount) },
+  // 操作列：详情所有人可见；删除仅超管，列宽随权限变化并固定右侧
   {
     title: '操作',
     key: 'actions',
@@ -350,37 +436,56 @@ const fishColumns: DataTableColumns<FishCacheItem> = [
 ]
 
 // ---------- 详情 ----------
+// 天气缓存详情弹窗显隐
 const showDetail = ref(false)
+// 天气缓存详情数据：cache 为行信息，payload 为缓存 JSON（weather 字段用于详情展示）
 const detail = ref<{ cache: CacheItem; payload: Record<string, unknown> } | null>(null)
 
+/**
+ * 打开天气缓存详情：先按 id 拉取完整 payload，成功后再展示弹窗。
+ * @param row 列表中的天气缓存行
+ */
 async function openDetail(row: CacheItem) {
   detail.value = await api.cacheDetail(row.id)
   showDetail.value = true
 }
 
+// 从 payload.weather 提取天气字段（天气现象/温度/湿度/风力等），payload 缺失时回退为空对象
 const weatherFields = computed(() => {
   const w = (detail.value?.payload?.weather as Record<string, unknown>) || {}
   return w
 })
 
+// 鱼情缓存详情弹窗显隐
 const showFishDetail = ref(false)
+// 鱼情缓存详情数据：cache 行信息、payload 完整分析结果、params 生成缓存时的查询参数
 const fishDetail = ref<{
   cache: FishCacheItem
   payload: Record<string, unknown>
   params: Record<string, string>
 } | null>(null)
 
+/**
+ * 打开鱼情缓存详情：拉取完整分析结果后展示弹窗。
+ * @param row 列表中的鱼情缓存行
+ */
 async function openFishDetail(row: FishCacheItem) {
   fishDetail.value = await api.fishCacheDetail(row.id)
   showFishDetail.value = true
 }
 
+// 从 payload.verdict 提取评分/结论/适宜鱼种/依据/建议，payload 缺失时回退为空对象
 const fishVerdict = computed(() => {
   const v = (fishDetail.value?.payload?.verdict as Record<string, unknown>) || {}
   return v
 })
 
 // ---------- 刷新 / 删除 ----------
+/**
+ * 刷新单条天气缓存：重新调用上游天气源并覆盖缓存，成功后刷新列表与统计。
+ * 失败时由 axios 拦截器统一提示，此处吞掉异常避免重复弹窗。
+ * @param row 待刷新的天气缓存行
+ */
 async function refreshRow(row: CacheItem) {
   try {
     await api.refreshCache(row.id)
@@ -392,6 +497,10 @@ async function refreshRow(row: CacheItem) {
   }
 }
 
+/**
+ * 批量刷新天气缓存（仅超管）：未勾选时提示；勾选后二次确认，确认后调用批量接口。
+ * 成功后清空勾选并刷新列表与统计。
+ */
 function confirmRefreshBatch() {
   if (!checkedKeys.value.length) {
     message.warning('请先勾选要刷新的缓存')
@@ -413,6 +522,10 @@ function confirmRefreshBatch() {
   })
 }
 
+/**
+ * 删除单条天气缓存（仅超管）：二次确认后调用删除接口，并同步列表与统计。
+ * @param row 待删除的天气缓存行
+ */
 function confirmDelete(row: CacheItem) {
   dialog.warning({
     title: '删除缓存',
@@ -428,6 +541,7 @@ function confirmDelete(row: CacheItem) {
   })
 }
 
+/** 批量删除天气缓存（仅超管）：需先勾选，二次确认后删除并刷新列表与统计。 */
 function confirmDeleteBatch() {
   if (!checkedKeys.value.length) {
     message.warning('请先勾选要删除的缓存')
@@ -449,6 +563,10 @@ function confirmDeleteBatch() {
   })
 }
 
+/**
+ * 删除单条鱼情缓存：删除后下一次相同查询会重新调用大模型生成。
+ * @param row 待删除的鱼情缓存行
+ */
 function confirmFishDelete(row: FishCacheItem) {
   dialog.warning({
     title: '删除鱼情缓存',
@@ -464,6 +582,7 @@ function confirmFishDelete(row: FishCacheItem) {
   })
 }
 
+/** 批量删除鱼情缓存：需先勾选，二次确认后删除并刷新列表与统计。 */
 function confirmFishDeleteBatch() {
   if (!fishCheckedKeys.value.length) {
     message.warning('请先勾选要删除的缓存')
@@ -485,6 +604,7 @@ function confirmFishDeleteBatch() {
   })
 }
 
+// 首屏加载天气缓存列表与统计看板（鱼情列表在 Tab 切换时再加载）
 onMounted(() => {
   load()
   loadStats()
@@ -493,6 +613,7 @@ onMounted(() => {
 
 <template>
   <div class="page">
+    <!-- 区块：页头 / 左侧标题与缓存策略说明，右侧按当前 Tab 展示已选数量与批量操作按钮 / 批量按钮仅超管可见，未勾选时禁用 -->
     <div class="pagehead">
       <div>
         <h2 class="pagehead__title">缓存管理</h2>
@@ -522,7 +643,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 统计看板 -->
+    <!-- 区块：统计看板 / 四列 KPI 卡片（总数量、占用空间、今日命中率、即将过期）/ stats 未加载时不渲染，避免空白占位 -->
     <div v-if="stats" class="stat-row">
       <div class="kpi">
         <div class="kpi__label">缓存总数量</div>
@@ -546,6 +667,7 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- 区块：命中趋势 / 近 7 天柱状图，柱高由 barHeight 按最大值归一化 / 悬停 title 显示当日命中数与查询总量 -->
     <div v-if="stats" class="card card--pad mt12">
       <div class="card__title">近 7 天缓存命中趋势</div>
       <div class="row" style="align-items: flex-end; gap: 6px; height: 70px; margin-top: 12px">
@@ -562,9 +684,11 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- 区块：缓存类型 Tab / weather 与 fish 两个面板，切换时由 onTypeChange 加载对应列表 -->
     <n-tabs v-model:value="cacheType" type="line" class="mt12" @update:value="onTypeChange">
-      <!-- 天气数据缓存 -->
+      <!-- 区块：天气缓存面板 / 筛选栏 + 远程分页表格 -->
       <n-tab-pane name="weather" tab="天气数据缓存（和风天气 · 3 小时）">
+        <!-- 区块：天气筛选栏 / 关键字、状态、来源、日期区间横向排列 / 文本输入防抖 300ms，下拉变更立即回到第 1 页 -->
         <div class="toolbar">
           <n-input
             v-model:value="query.keyword"
@@ -581,6 +705,7 @@ onMounted(() => {
           <n-input v-model:value="query.endDate" placeholder="结束日期 YYYY-MM-DD" style="width: 180px" @update:value="onKeyword" />
         </div>
 
+        <!-- 区块：天气缓存表格 / remote 分页，勾选与批量按钮联动 / scroll-x=1600 保证窄屏横向滚动 -->
         <div class="card">
           <n-spin :show="loading">
             <n-data-table
@@ -598,8 +723,9 @@ onMounted(() => {
         </div>
       </n-tab-pane>
 
-      <!-- 鱼情分析缓存 -->
+      <!-- 区块：鱼情缓存面板 / 筛选栏 + 远程分页表格，仅支持删除不支持刷新 -->
       <n-tab-pane name="fish" tab="鱼情分析缓存（大模型 · 3 小时）">
+        <!-- 区块：鱼情筛选栏 / 关键字额外匹配查询参数 / 与天气面板共用防抖与重置逻辑 -->
         <div class="toolbar">
           <n-input
             v-model:value="fishQuery.keyword"
@@ -616,6 +742,7 @@ onMounted(() => {
           <n-input v-model:value="fishQuery.endDate" placeholder="结束日期 YYYY-MM-DD" style="width: 180px" @update:value="onKeyword" />
         </div>
 
+        <!-- 区块：鱼情缓存表格 / 独立分页与勾选状态 / 列定义见 fishColumns -->
         <div class="card">
           <n-spin :show="loading">
             <n-data-table
@@ -634,7 +761,7 @@ onMounted(() => {
       </n-tab-pane>
     </n-tabs>
 
-    <!-- 天气缓存详情 -->
+    <!-- 区块：天气缓存详情弹窗 / 两列描述列表展示缓存元信息与天气字段 / detail 为空时不渲染内容 -->
     <n-modal v-model:show="showDetail" preset="card" title="天气缓存详情" style="width: 720px">
       <n-descriptions v-if="detail" label-placement="left" :column="2" size="small" bordered>
         <n-descriptions-item label="缓存键">
@@ -662,7 +789,7 @@ onMounted(() => {
       </template>
     </n-modal>
 
-    <!-- 鱼情缓存详情 -->
+    <!-- 区块：鱼情缓存详情弹窗 / 展示评分、结论、适宜鱼种与出钓建议 / 鱼种需判空后 join 展示 -->
     <n-modal v-model:show="showFishDetail" preset="card" title="鱼情分析缓存详情" style="width: 720px">
       <n-descriptions v-if="fishDetail" label-placement="left" :column="2" size="small" bordered>
         <n-descriptions-item label="缓存键">

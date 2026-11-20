@@ -1,4 +1,16 @@
 <script setup lang="ts">
+/**
+ * AdminLayout.vue — 后台主布局（侧边栏 + 顶栏 + 内容区）
+ *
+ * 职责：
+ * 1. 渲染固定侧边栏，按业务域分组展示菜单，高亮当前路由；
+ * 2. 渲染顶栏：页面标题、全局搜索框、通知入口、当前管理员信息；
+ * 3. 中部 <router-view /> 承载各业务页面；
+ * 4. 侧边栏底部展示当前管理员并提供退出登录。
+ * 关键流程：route.path -> currentTitle 计算属性 -> 顶栏标题；onLogout -> auth.logout() -> 跳转 /login。
+ * 依赖：@vicons/ionicons5 图标、@/stores/auth 登录态、vue-router 当前路由。
+ * 注意：菜单项 path 必须与 router/index.ts 中子路由保持一致，否则高亮与跳转会失效。
+ */
 import {
   ArchiveOutline,
   BagHandleOutline,
@@ -23,19 +35,31 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 
-const route = useRoute()
-const router = useRouter()
-const auth = useAuthStore()
+const route = useRoute() // 当前路由：用于侧边栏高亮与顶栏标题
+const router = useRouter() // 路由实例：菜单跳转与退出登录后重定向
+const auth = useAuthStore() // 管理员登录态：顶栏展示名称/角色，退出时清理
 
+/**
+ * 侧边栏单个菜单项
+ */
 interface MenuItem {
+  /** 菜单唯一键（用于 v-for :key） */
   key: string
+  /** 菜单显示文案 */
   label: string
+  /** 菜单图标组件（@vicons 组件） */
   icon: Component
+  /** 目标路由绝对路径，需与路由表一致 */
   path: string
 }
 
+/**
+ * 侧边栏分组
+ */
 interface MenuGroup {
+  /** 分组标题（如「数据中心」） */
   title: string
+  /** 该分组下的菜单项 */
   items: MenuItem[]
 }
 
@@ -73,8 +97,13 @@ const menuGroups: MenuGroup[] = [
   },
 ]
 
+/** 顶栏标题：取当前路由 meta.title，缺省为空串 */
 const currentTitle = computed(() => String(route.meta.title ?? ''))
 
+/**
+ * 退出登录：清理登录态后回到登录页（replace 避免回退到后台页）
+ * @returns {Promise<void>}
+ */
 async function onLogout() {
   await auth.logout()
   router.replace('/login')
@@ -82,8 +111,11 @@ async function onLogout() {
 </script>
 
 <template>
+  <!-- 区块：后台整体骨架 / 左侧固定侧边栏 + 右侧主区域左右两栏布局 -->
   <div class="admin-shell">
+    <!-- 区块：侧边栏 / 自上而下为品牌区、分组菜单、底部管理员信息 -->
     <aside class="admin-sider">
+      <!-- 区块：品牌区 / logo + 产品名与「后台管理系统」副标题 -->
       <div class="admin-sider__brand">
         <div class="admin-sider__logo">
           <n-icon :component="FishOutline" :size="22" />
@@ -94,6 +126,7 @@ async function onLogout() {
         </div>
       </div>
       <div class="admin-sider__label">管理中心</div>
+      <!-- 区块：菜单列表 / 按 menuGroups 双层循环，外层分组标题、内层路由链接；当前路径命中时加 is-active -->
       <nav class="admin-sider__list">
         <template v-for="g in menuGroups" :key="g.title">
           <div class="admin-sider__group">{{ g.title }}</div>
@@ -109,6 +142,7 @@ async function onLogout() {
           </router-link>
         </template>
       </nav>
+      <!-- 区块：侧边栏底部 / 当前管理员头像与名称，以及退出登录（悬停显示 tooltip） -->
       <div class="admin-sider__foot">
         <span class="avatar avatar--md">{{ auth.avatarText }}</span>
         <div class="admin-sider__foot-info">
@@ -126,7 +160,9 @@ async function onLogout() {
       </div>
     </aside>
 
+    <!-- 区块：右侧主区域 / 顶栏 + 可滚动内容区 -->
     <div class="admin-main">
+      <!-- 区块：顶栏 / 左标题、搜索框、弹性占位、通知图标、分隔线与当前用户 -->
       <header class="admin-top">
         <span class="admin-top__title">{{ currentTitle }}</span>
         <n-input
@@ -151,6 +187,7 @@ async function onLogout() {
           {{ auth.displayName }}
         </div>
       </header>
+      <!-- 区块：内容区 / 各业务页面在此渲染 -->
       <main>
         <router-view />
       </main>

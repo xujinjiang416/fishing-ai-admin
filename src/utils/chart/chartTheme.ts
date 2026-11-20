@@ -22,7 +22,7 @@ export function getVariable(name: string): string {
   return CHART_COLORS[name] ?? ''
 }
 
-/** 图表色盘（hex） */
+/** 图表色盘（hex）：按主色、强调、金、信息、成功、警告、危险等顺序循环取色 */
 const COLOR_DISK_HEX = [
   '#0F8B8D', // primary
   '#FF7A3D', // accent
@@ -36,11 +36,21 @@ const COLOR_DISK_HEX = [
   '#3D4F4D', // ink-2
 ]
 
+/**
+ * 获取图表色盘
+ * @param {'hex' | 'rgb'} [type='hex'] 返回格式：hex 为 `#RRGGBB`，rgb 为 `r, g, b`
+ * @returns {string[]} 色值数组（返回副本，调用方可安全修改）
+ */
 export function getColorDisk(type: 'hex' | 'rgb' = 'hex'): string[] {
   if (type === 'hex') return [...COLOR_DISK_HEX]
   return COLOR_DISK_HEX.map(hexToRgbString)
 }
 
+/**
+ * hex 转 "r, g, b" 字符串（不带 rgb() 外壳）
+ * @param {string} hex 6 位十六进制色值（如 #0F8B8D）
+ * @returns {string} 形如 "15, 139, 141"
+ */
 function hexToRgbString(hex: string): string {
   const h = hex.replace('#', '')
   const r = parseInt(h.slice(0, 2), 16)
@@ -49,9 +59,15 @@ function hexToRgbString(hex: string): string {
   return `${r}, ${g}, ${b}`
 }
 
-/** 将颜色字符串转为 rgba(r,g,b,opacity)，支持 #RGB / #RRGGBB / rgb() / rgba() */
+/**
+ * 将颜色字符串转为 rgba(r,g,b,opacity)，支持 #RGB / #RRGGBB / rgb() / rgba()
+ * @param {string} color 原始颜色字符串
+ * @param {number} opacity 目标透明度（0-1）
+ * @returns {string} rgba 颜色字符串；无法识别时回退为品牌主色的半透明值
+ */
 export function colorToRgba(color: string, opacity: number): string {
   color = (color || '').trim()
+  // 分支一：十六进制（3 位简写会复制每位扩展为 6 位）
   const hexMatch = color.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
   if (hexMatch) {
     let r: number, g: number, b: number
@@ -67,6 +83,7 @@ export function colorToRgba(color: string, opacity: number): string {
     }
     return `rgba(${r},${g},${b},${opacity})`
   }
+  // 分支二：rgb()/rgba()，忽略原有 alpha，替换为目标透明度
   const rgbMatch = color.match(
     /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*[\d.]+)?\s*\)/,
   )

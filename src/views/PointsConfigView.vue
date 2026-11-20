@@ -7,6 +7,9 @@
  * - 配置「观看广告赚取积分」的单次积分值（以及广告时长、每日额度）；
  * - 可选配置评论敏感词词库；
  * - 保存后写入后端 app_configs 表，实时生效（小程序端拉取到最新配置），并记录操作日志。
+ *
+ * 接口：GET /admin/config 读取配置、PUT /admin/config 保存配置（api.config / api.updateConfig）。
+ * 权限/限制：需登录的管理员；各数值项非负，输入框 min/max 仅作前端约束，最终以后端配置为准。
  */
 import { OptionsOutline, SaveOutline } from '@vicons/ionicons5'
 import { onMounted, reactive, ref } from 'vue'
@@ -14,21 +17,36 @@ import { useMessage } from 'naive-ui'
 
 import { api } from '@/api/admin'
 
+// 全局消息实例：保存成功等结果提示
 const message = useMessage()
+// 读取配置请求中标记，控制整页 n-spin
 const loading = ref(false)
+// 保存请求中标记，控制「保存配置」按钮 loading
 const saving = ref(false)
 
 // 表单数据：与后端 /admin/config 的 camelCase 字段一一对应
 const form = reactive({
+  // 会员每日签到积分，默认 5，范围 0~100000
   checkinMemberPoints: 5,
+  // 非会员每日签到积分，默认 1，范围 0~100000
   checkinNormalPoints: 1,
+  // 单次观看广告奖励积分，默认 5，范围 0~100000
   adPoints: 5,
+  // 单次广告播放时长（秒），默认 30，范围 5~180
   adSeconds: 30,
+  // 非会员每日广告观看上限（条），默认 15，范围 0~1000
   adLimitNormal: 15,
+  // 会员每日广告观看上限（条），默认 20，范围 0~1000
   adLimitMember: 20,
+  // 自定义评论敏感词（英文逗号分隔），默认空串表示使用内置词库
   sensitiveWords: '',
 })
 
+/**
+ * 读取积分配置
+ * 将接口返回值逐项回填到表单；sensitiveWords 为 null 时转为空串。
+ * @returns {Promise<void>} 请求结束后复位 loading（异常由 axios 拦截器统一提示）
+ */
 async function load() {
   loading.value = true
   try {
@@ -45,6 +63,12 @@ async function load() {
   }
 }
 
+/**
+ * 保存积分配置
+ * 步骤：1) 置 saving；2) 提交整份表单；3) 成功后提示并重新加载以确认服务端最新值；
+ * 4) finally 复位 saving。
+ * @returns {Promise<void>}
+ */
 async function save() {
   saving.value = true
   try {
@@ -65,11 +89,14 @@ async function save() {
   }
 }
 
+// 首次进入页面即读取当前配置
 onMounted(load)
 </script>
 
 <template>
+  <!-- 区块：积分配置根容器 / 页头 + 签到、广告、敏感词三组配置卡片 -->
   <div class="page">
+    <!-- 区块：页头 / 左侧标题与生效说明，右侧全局「保存配置」按钮 -->
     <div class="pagehead">
       <div>
         <h2 class="pagehead__title">积分配置</h2>
@@ -87,8 +114,9 @@ onMounted(load)
       </div>
     </div>
 
+    <!-- 整页加载态：配置读取完成前以 n-spin 遮罩，避免闪现默认值 -->
     <n-spin :show="loading">
-      <!-- 签到积分 -->
+      <!-- 区块：签到积分 / 两列配置项（会员与非会员的每日签到积分） -->
       <div class="card card--pad" style="margin-bottom: 14px">
         <div class="card__title" style="margin-bottom: 14px">签到领取积分</div>
         <div class="config-grid">
@@ -119,7 +147,7 @@ onMounted(load)
         </div>
       </div>
 
-      <!-- 广告积分 -->
+      <!-- 区块：广告积分 / 四列配置项（单次积分、广告时长、非会员与会员每日额度） -->
       <div class="card card--pad" style="margin-bottom: 14px">
         <div class="card__title" style="margin-bottom: 14px">观看广告赚取积分</div>
         <div class="config-grid">
@@ -164,7 +192,7 @@ onMounted(load)
         </div>
       </div>
 
-      <!-- 评论敏感词 -->
+      <!-- 区块：评论敏感词 / 文本域按英文逗号分隔录入，留空表示沿用系统内置词库 -->
       <div class="card card--pad">
         <div class="card__title" style="margin-bottom: 6px">评论敏感词词库</div>
         <div class="config-item__desc" style="margin-bottom: 12px">
@@ -178,6 +206,7 @@ onMounted(load)
         />
       </div>
 
+      <!-- 页脚提示：说明配置即时生效并写入操作日志，供审计追溯 -->
       <div class="config-item__desc" style="margin-top: 14px">
         <n-icon :component="OptionsOutline" :size="14" style="vertical-align: -2px" />
         提示：所有配置项修改后立即生效，并会记录到「系统设置 · 操作日志」中以便审计追溯。

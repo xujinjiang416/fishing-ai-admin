@@ -7,6 +7,11 @@
  * - 支持单条删除 与 批量选中删除，均带二次确认；
  * - 删除后后端同步维护钓点评论数，小程序端拉取的评论列表即不再包含该条；
  * - 所有删除操作记录到「操作日志」。
+ *
+ * 接口来源：`@/api/admin` 的 api.comments / api.deleteComment / api.batchDeleteComments。
+ *
+ * 关键交互：关键词输入 300ms 防抖；翻页后自动清理不在当前页的选中项；
+ * 页面不做角色限制，删除按钮对所有已登录后台角色可见，由后端最终校验。
  */
 import { SearchOutline, TrashOutline } from '@vicons/ionicons5'
 import {
@@ -27,15 +32,22 @@ function ellipsis(text: string) {
   return h(NEllipsis, { style: 'max-width: 100%' }, { default: () => text })
 }
 
-const message = useMessage()
-const dialog = useDialog()
+const message = useMessage() // Naive UI 轻提示实例
+const dialog = useDialog() // Naive UI 确认对话框实例（删除二次确认）
 
+// 当前页评论数据
 const rows = ref<AdminComment[]>([])
+// 表格加载态
 const loading = ref(false)
+// 筛选条件：keyword 匹配评论正文 / 评论人
 const query = reactive({ keyword: '' })
 // 多选选中的评论 id 集合
 const checkedKeys = ref<string[]>([])
 
+/**
+ * 分页配置（remote 模式）：page 当前页、pageSize 每页条数、itemCount 服务端总数；
+ * 翻页或调整每页条数后重新请求，调整条数时回到第 1 页。
+ */
 const pagination = reactive({
   page: 1,
   pageSize: 10,
@@ -55,6 +67,7 @@ const pagination = reactive({
 
 // 关键词搜索防抖
 let timer: ReturnType<typeof setTimeout> | undefined
+/** 关键词输入防抖（300ms）：触发时回到第 1 页再查询 */
 function onKeyword() {
   clearTimeout(timer)
   timer = setTimeout(() => {
@@ -63,6 +76,10 @@ function onKeyword() {
   }, 300)
 }
 
+/**
+ * 拉取评论列表并同步总数。
+ * 请求成功后过滤选中项，仅保留仍在当前页的评论，避免跨页误删。
+ */
 async function load() {
   loading.value = true
   try {
@@ -81,8 +98,11 @@ async function load() {
   }
 }
 
+// 表格列：多选、评论人、关联内容、评论正文（含图片与评分）、发布时间、操作
 const columns: DataTableColumns<AdminComment> = [
+  // 列：多选
   { type: 'selection' },
+  // 列：评论人（头像 + 昵称 + UID，游客显示「游客」）
   {
     title: '评论人',
     key: 'user',
@@ -96,12 +116,14 @@ const columns: DataTableColumns<AdminComment> = [
         ]),
       ]),
   },
+  // 列：关联内容（钓点名称，缺失时回退展示钓点 id）
   {
     title: '关联内容',
     key: 'spot',
     width: 180,
     render: (row) => h('span', { style: 'display: block' }, ellipsis(row.spot || row.spotId)),
   },
+  // 列：评论内容（正文省略、最多行内展示图片缩略图 + 评分）
   {
     title: '评论内容',
     key: 'text',
@@ -119,12 +141,14 @@ const columns: DataTableColumns<AdminComment> = [
         h('div', { class: 'td-s' }, `评分 ${row.rating} 星`),
       ]),
   },
+  // 列：发布时间（优先 createdAt，缺失时回退 date）
   {
     title: '发布时间',
     key: 'createdAt',
     width: 160,
     render: (row) => h('span', { class: 'td-s' }, ellipsis(row.createdAt || row.date || '—')),
   },
+  // 列：操作（单条删除，危险色弱化按钮）
   {
     title: '操作',
     key: 'actions',
@@ -139,7 +163,10 @@ const columns: DataTableColumns<AdminComment> = [
   },
 ]
 
-/** 单条删除：二次确认 */
+/**
+ * 单条删除：二次确认后调用删除接口并刷新列表。
+ * @param row 目标评论
+ */
 function confirmDelete(row: AdminComment) {
   dialog.warning({
     title: '删除评论',
@@ -175,11 +202,13 @@ function confirmBatchDelete() {
   })
 }
 
+// 首屏加载评论列表
 onMounted(load)
 </script>
 
 <template>
   <div class="page">
+    <!-- 区块：页头 / 标题描述在左；右侧为已选数量与批量删除入口（未选中时按钮禁用） -->
     <div class="pagehead">
       <div>
         <h2 class="pagehead__title">评论管理</h2>
@@ -198,6 +227,7 @@ onMounted(load)
       </div>
     </div>
 
+    <!-- 区块：筛选栏 / 关键词搜索（300ms 防抖），匹配评论正文与评论人 -->
     <div class="toolbar">
       <n-input
         v-model:value="query.keyword"
@@ -212,6 +242,7 @@ onMounted(load)
       </n-input>
     </div>
 
+    <!-- 区块：评论表格 / remote 分页 + 多选，横向滚动宽度 1150，无空数据自定义插槽 -->
     <div class="card">
       <n-data-table
         :columns="columns"

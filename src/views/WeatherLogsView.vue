@@ -1,4 +1,19 @@
 <script setup lang="ts">
+/**
+ * WeatherLogsView.vue — 数据管理 · 天气数据
+ *
+ * 页面职责：
+ * - 分页展示用户生成的 AI 天气 / 鱼情记录（用户、地点、鱼情结论、气温气压、来源等）；
+ * - 支持关键词（用户 / 地点 / 记录编号）与来源（手动选点 / 手机定位）筛选；
+ * - 支持单条重新生成、单条删除、批量重新生成与批量删除；
+ * - 行点击打开详情弹窗，查看完整天气指标与解锁方式。
+ *
+ * 接口来源：`@/api/admin` 的 api.weatherLogs / api.regenerateWeather /
+ * api.deleteWeatherLog / api.batchDeleteWeatherLogs。
+ *
+ * 关键交互：关键词输入 300ms 防抖；筛选变更回到第 1 页；翻页后清理不在当前页的选中项。
+ * 删除为不可恢复操作，单条与批量均需二次确认。
+ */
 import { RefreshOutline, SearchOutline, TrashOutline } from '@vicons/ionicons5'
 import {
   NButton,
@@ -20,13 +35,21 @@ function ellipsis(text: string) {
   return h(NEllipsis, { style: 'max-width: 100%' }, { default: () => text })
 }
 
-const message = useMessage()
-const dialog = useDialog()
+const message = useMessage() // Naive UI 轻提示实例
+const dialog = useDialog() // Naive UI 确认对话框实例（删除二次确认）
 
+// 当前页天气记录
 const rows = ref<WeatherLog[]>([])
+// 多选选中的记录 id 集合（row-key 为记录 id）
 const checkedKeys = ref<string[]>([])
+// 表格加载态
 const loading = ref(false)
+// 筛选条件：keyword 匹配用户 / 地点 / 编号；source 取值见 sourceOptions，'全部' 表示不过滤
 const query = reactive({ keyword: '', source: '全部' })
+/**
+ * 分页配置（remote 模式）：page 当前页、pageSize 每页条数（默认 8）、
+ * itemCount 服务端总数；翻页或调整每页条数后重新请求。
+ */
 const pagination = reactive({
   page: 1,
   pageSize: 8,
@@ -45,6 +68,7 @@ const pagination = reactive({
 })
 
 let timer: ReturnType<typeof setTimeout> | undefined
+/** 关键词输入防抖（300ms）：触发时重置到第 1 页再查询 */
 function onKeyword() {
   clearTimeout(timer)
   timer = setTimeout(() => {
@@ -53,11 +77,16 @@ function onKeyword() {
   }, 300)
 }
 
+/** 来源筛选变化：回到第 1 页重新查询 */
 function resetAndLoad() {
   pagination.page = 1
   load()
 }
 
+/**
+ * 拉取天气记录列表并同步总数。
+ * 请求成功后过滤选中项，仅保留仍在当前页的记录，避免跨页误删。
+ */
 async function load() {
   loading.value = true
   try {
@@ -77,16 +106,21 @@ async function load() {
   }
 }
 
+// 来源筛选项：与小程序端记录来源文案一致
 const sourceOptions = ['全部', '手动选点', '手机定位'].map((s) => ({ label: s, value: s }))
 
+// 表格列：首列为多选，其后依次为记录信息、天气指标与操作列
 const columns: DataTableColumns<WeatherLog> = [
+  // 列：多选
   { type: 'selection' },
+  // 列：记录编号
   {
     title: '记录编号',
     key: 'id',
     width: 140,
     render: (row) => h('span', { class: 'num td-s' }, ellipsis(row.id)),
   },
+  // 列：用户（首字头像 + 昵称）
   {
     title: '用户',
     key: 'user',
@@ -97,6 +131,7 @@ const columns: DataTableColumns<WeatherLog> = [
         h('span', { class: 'td-t' }, ellipsis(row.user)),
       ]),
   },
+  // 列：地点（主地点 + 详细位置，两级均单行省略）
   {
     title: '地点',
     key: 'place',
@@ -107,6 +142,7 @@ const columns: DataTableColumns<WeatherLog> = [
         h('span', { class: 'td-s' }, ellipsis(row.placeDetail ?? '')),
       ]),
   },
+  // 列：结论（鱼情等级标签，levelTag 映射文案与配色）
   {
     title: '结论',
     key: 'level',
@@ -123,32 +159,39 @@ const columns: DataTableColumns<WeatherLog> = [
         { default: () => levelTag(row.level).text },
       ),
   },
+  // 列：分数（鱼情评分）
   {
     title: '分数',
     key: 'score',
     width: 70,
     render: (row) => h('span', { class: 'num' }, row.score),
   },
+  // 列：气温（空值显示 “—”，单位 °C）
   {
     title: '气温',
     key: 'temp',
     width: 80,
     render: (row) => h('span', { class: 'num', style: 'white-space: nowrap' }, (row.temp ?? '—') + '°C'),
   },
+  // 列：气压（空值显示 “—”，单位 hPa）
   {
     title: '气压',
     key: 'pressure',
     width: 100,
     render: (row) => h('span', { class: 'num', style: 'white-space: nowrap' }, (row.pressure ?? '—') + ' hPa'),
   },
+  // 列：生成时间
   {
     title: '生成时间',
     key: 'date',
     width: 150,
     render: (row) => h('span', { class: 'td-s' }, ellipsis(row.date)),
   },
+  // 列：来源（手动选点 / 手机定位）
   { title: '来源', key: 'source', width: 90, render: (row) => h('span', { class: 'td-s' }, row.source) },
+  // 列：解锁方式（记录生成时的消耗方式）
   { title: '解锁方式', key: 'cost', width: 100, render: (row) => h('span', { class: 'td-s' }, row.cost) },
+  // 列：操作（重新生成 / 删除）
   {
     title: '操作',
     key: 'actions',
@@ -176,6 +219,10 @@ const columns: DataTableColumns<WeatherLog> = [
   },
 ]
 
+/**
+ * 单条重新生成：调用后端重新分析天气并返回新结论，成功后刷新列表。
+ * @param row 目标记录
+ */
 async function regenerate(row: WeatherLog) {
   try {
     const r = await api.regenerateWeather(row.id)
@@ -186,10 +233,15 @@ async function regenerate(row: WeatherLog) {
   }
 }
 
+/** 批量重新生成：当前仅演示提示，未调用后端批量接口 */
 function batchRegenerate() {
   message.success('已提交批量任务（演示）')
 }
 
+/**
+ * 单条删除：二次确认后删除并刷新列表。
+ * @param row 目标记录
+ */
 function confirmDelete(row: WeatherLog) {
   dialog.warning({
     title: '删除记录',
@@ -226,19 +278,27 @@ function confirmBatchDelete() {
 }
 
 // ---------- 详情弹窗 ----------
+// 详情弹窗显隐
 const showDetail = ref(false)
+// 当前查看的记录；null 时不渲染描述列表
 const detail = ref<WeatherLog | null>(null)
 
+/**
+ * 打开详情弹窗：直接复用列表行数据，不再单独请求详情接口。
+ * @param row 目标记录
+ */
 function openDetail(row: WeatherLog) {
   detail.value = row
   showDetail.value = true
 }
 
+// 首屏加载列表
 onMounted(load)
 </script>
 
 <template>
   <div class="page">
+    <!-- 区块：页头 / 标题描述在左；右侧为已选数量与批量删除、批量重新生成入口 -->
     <div class="pagehead">
       <div>
         <h2 class="pagehead__title">天气数据</h2>
@@ -261,6 +321,7 @@ onMounted(load)
       </div>
     </div>
 
+    <!-- 区块：筛选栏 / 关键词输入（300ms 防抖）+ 来源下拉（变更即查询） -->
     <div class="toolbar">
       <n-input
         v-model:value="query.keyword"
@@ -281,6 +342,7 @@ onMounted(load)
       />
     </div>
 
+    <!-- 区块：天气记录表格 / remote 分页 + 多选；行点击打开详情，横向滚动宽度 1400 -->
     <div class="card">
       <n-data-table
         :columns="columns"
@@ -296,7 +358,7 @@ onMounted(load)
       />
     </div>
 
-    <!-- 详情弹窗 -->
+    <!-- 区块：详情弹窗 / 两列描述列表展示完整天气指标，底部仅保留关闭按钮 -->
     <n-modal v-model:show="showDetail" preset="card" title="天气记录详情" style="width: 640px">
       <n-descriptions v-if="detail" label-placement="left" :column="2" size="small" bordered>
         <n-descriptions-item label="地点"><span class="td-t">{{ detail.place ?? '—' }}</span></n-descriptions-item>
