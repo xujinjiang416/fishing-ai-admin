@@ -185,8 +185,6 @@ export interface Spot {
   name: string
   /** 所在城市，未知为 null */
   city: string | null
-  /** 距用户距离（km） */
-  dist: number
   /** 综合评分（0-5） */
   rating: number
   /** 评论数量 */

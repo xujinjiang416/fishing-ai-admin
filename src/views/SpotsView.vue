@@ -189,7 +189,6 @@ const form = reactive({
   name: '',
   city: '',
   coords: '',
-  dist: 0, // 距离（km），默认 0
   pay: '免费', // 收费说明，默认免费
   fish: '',
   status: true, // 上架开关，true=online
@@ -210,7 +209,6 @@ function openCreate() {
   form.name = ''
   form.city = ''
   form.coords = ''
-  form.dist = 0
   form.pay = '免费'
   form.fish = ''
   form.status = true
@@ -229,7 +227,6 @@ function openEdit(s: Spot) {
   form.name = s.name
   form.city = s.city ?? ''
   form.coords = s.coords ?? ''
-  form.dist = s.dist
   form.pay = s.pay ?? '免费'
   form.fish = (s.fish ?? []).join(', ')
   form.status = s.status === 'online'
@@ -298,7 +295,6 @@ async function save() {
     name: form.name.trim(),
     city: form.city.trim() || undefined,
     coords: form.coords.trim() || undefined,
-    dist: form.dist,
     pay: form.pay.trim() || '免费',
     fish: form.fish.split(/[,，]/).map((s) => s.trim()).filter(Boolean),
     gallery: finalGallery.value,
@@ -442,7 +438,6 @@ onMounted(load)
             </div>
 
             <div class="spot-card__right">
-              <div class="spot-card__dist">{{ s.dist.toFixed(1) }} km</div>
               <div class="spot-card__by">{{ s.addedBy }} · {{ s.createdAt }}</div>
               <div class="rowbtns" style="margin-top: 6px">
                 <n-button
@@ -531,9 +526,6 @@ onMounted(load)
             </n-form-item>
             <n-form-item label="坐标">
               <n-input v-model:value="form.coords" placeholder="如：30.2413°N, 120.1032°E" />
-            </n-form-item>
-            <n-form-item label="距离（km）">
-              <n-input-number v-model:value="form.dist" :min="0" :precision="1" :step="0.5" style="width: 100%" />
             </n-form-item>
             <n-form-item label="收费">
               <n-input v-model:value="form.pay" placeholder="如：免费 / 收费 20 元/天" />
