@@ -70,6 +70,18 @@ const router = createRouter({
           component: () => import('@/views/SpotsView.vue'),
           meta: { title: '钓点管理' },
         },
+        // 钓点审核 · 用户投稿审核
+        {
+          path: 'reviews',
+          component: () => import('@/views/ReviewsView.vue'),
+          meta: { title: '钓点审核' },
+        },
+        // 钓点审核 · 用户纠错处理
+        {
+          path: 'reports',
+          component: () => import('@/views/ReportsView.vue'),
+          meta: { title: '纠错处理' },
+        },
         // 内容管理 · 评论管理
         {
           path: 'comments',

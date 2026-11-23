@@ -16,6 +16,7 @@ import {
   BagHandleOutline,
   CartOutline,
   ChatbubbleEllipsesOutline,
+  CheckmarkDoneOutline,
   CloudOutline,
   FishOutline,
   LocationOutline,
@@ -28,6 +29,7 @@ import {
   SearchOutline,
   StatsChartOutline,
   TimerOutline,
+  WarningOutline,
 } from '@vicons/ionicons5'
 import type { Component } from 'vue'
 import { computed } from 'vue'
@@ -78,6 +80,8 @@ const menuGroups: MenuGroup[] = [
       { key: 'orders', label: '订单管理', icon: CartOutline, path: '/orders' },
       { key: 'weather', label: '天气数据', icon: CloudOutline, path: '/weather' },
       { key: 'spots', label: '钓点管理', icon: LocationOutline, path: '/spots' },
+      { key: 'reviews', label: '钓点审核', icon: CheckmarkDoneOutline, path: '/reviews' },
+      { key: 'reports', label: '纠错处理', icon: WarningOutline, path: '/reports' },
     ],
   },
   {

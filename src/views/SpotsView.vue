@@ -12,21 +12,48 @@
  */
 import {
   AddOutline,
+  ChatbubbleEllipsesOutline,
   CheckmarkOutline,
   CreateOutline,
   ImageOutline,
   LocationOutline,
+  MapOutline,
   RemoveOutline,
   SearchOutline,
   Star,
   StarOutline,
+  TimeOutline,
   TrashOutline,
 } from '@vicons/ionicons5'
 import { NButton, NCheckbox, NIcon, NInputNumber, NSelect, NSwitch, NTag, useDialog, useMessage } from 'naive-ui'
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { api, type Spot } from '@/api/admin'
+import { api, type Spot, type SpotCoordHistory, type SpotFishabilityDetail } from '@/api/admin'
+import CoordPicker from '@/components/CoordPicker.vue'
 import { fishTag, payTag, statusTag } from '@/utils/tags'
+
+/** 标签类型（n-tag type 取值） */
+type TagType = 'default' | 'success' | 'warning' | 'error' | 'info' | 'primary'
+
+/** 数据来源文案 */
+function sourceLabel(s: string | undefined) {
+  return s === 'ugc' ? '用户投稿' : s === 'admin' ? '后台维护' : s === 'ai' ? 'AI 生成' : s || '—'
+}
+
+/** 数据来源标签色 */
+function sourceTagType(s: string | undefined): TagType {
+  return s === 'ugc' ? 'info' : s === 'admin' ? 'primary' : 'default'
+}
+
+/** 核实等级文案 */
+function verifiedLabel(v: string | undefined) {
+  return v === 'verified' ? '已核实' : v === 'user_verified' ? '用户核实' : '未核实'
+}
+
+/** 核实等级标签色 */
+function verifiedTagType(v: string | undefined): TagType {
+  return v === 'verified' ? 'success' : v === 'user_verified' ? 'info' : 'default'
+}
 
 const message = useMessage() // 操作成功/校验失败的轻提示
 const dialog = useDialog() // 删除类操作的二次确认弹窗
@@ -117,16 +144,132 @@ function stars(rating: number) {
   return Array.from({ length: 5 }, (_, i) => i < n)
 }
 
-/**
- * 切换钓点上下架状态：先调用更新接口，成功后同步本地 status 并提示。
- * 采用乐观更新，避免整页刷新导致滚动位置丢失。
- * @param spot 目标钓点行
- */
-async function toggle(spot: Spot) {
-  const status = spot.status === 'online' ? 'offline' : 'online'
-  await api.updateSpot(spot.id, { status })
-  spot.status = status
-  message.success(status === 'online' ? `「${spot.name}」已上架` : `「${spot.name}」已下架`)
+// ---------- 上下架 ----------
+const showStatus = ref(false)
+const statusTarget = ref<Spot | null>(null)
+const statusReason = ref('')
+const statusSaving = ref(false)
+
+/** 打开下架 / 恢复弹窗 */
+function openStatus(spot: Spot) {
+  statusTarget.value = spot
+  statusReason.value = ''
+  showStatus.value = true
+}
+
+/** 调用上下架接口并同步本地状态 */
+async function saveStatus() {
+  if (!statusTarget.value) return
+  statusSaving.value = true
+  try {
+    const target = statusTarget.value
+    const r = await api.toggleSpotStatus(target.id, statusReason.value.trim() || undefined)
+    target.status = r.status
+    showStatus.value = false
+    message.success(r.status === 'online' ? `「${target.name}」已恢复上架` : `「${target.name}」已下架`)
+  } finally {
+    statusSaving.value = false
+  }
+}
+
+// ---------- 坐标校正 ----------
+const showCoord = ref(false)
+const coordTarget = ref<Spot | null>(null)
+const coordSaving = ref(false)
+const coordForm = reactive({ coords: '', reason: '' })
+
+/** 打开坐标校正弹窗 */
+function openCoord(spot: Spot) {
+  coordTarget.value = spot
+  coordForm.coords = spot.coords ?? ''
+  coordForm.reason = ''
+  showCoord.value = true
+}
+
+/** 提交坐标校正：校验格式与原因后调用接口，成功后刷新列表 */
+async function saveCoord() {
+  if (!coordTarget.value) return
+  const coords = coordForm.coords.trim()
+  if (!/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(coords)) {
+    message.warning('坐标格式应为 lng,lat，如 120.15,30.28')
+    return
+  }
+  if (!coordForm.reason.trim()) {
+    message.warning('请填写校正原因')
+    return
+  }
+  coordSaving.value = true
+  try {
+    const r = await api.updateSpotCoord(coordTarget.value.id, {
+      coords,
+      reason: coordForm.reason.trim(),
+    })
+    message.success(`坐标已更新，偏移约 ${r.distanceKm} km`)
+    showCoord.value = false
+    load()
+  } finally {
+    coordSaving.value = false
+  }
+}
+
+// ---------- 坐标历史 ----------
+const showHistory = ref(false)
+const historyTarget = ref<Spot | null>(null)
+const historyRows = ref<SpotCoordHistory[]>([])
+const historyLoading = ref(false)
+
+/** 打开历史弹窗并拉取坐标变更记录 */
+async function openHistory(spot: Spot) {
+  historyTarget.value = spot
+  historyRows.value = []
+  showHistory.value = true
+  historyLoading.value = true
+  try {
+    historyRows.value = await api.spotHistory(spot.id)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+// ---------- 钓况反馈 ----------
+const showFish = ref(false)
+const fishTarget = ref<Spot | null>(null)
+const fishLoading = ref(false)
+const fishDetail = ref<SpotFishabilityDetail>({
+  yes: 0,
+  no: 0,
+  limit: 5,
+  hidden: false,
+  list: [],
+})
+
+/** 打开钓况反馈弹窗：先用列表中的统计占位，再拉取逐条反馈明细 */
+async function openFish(spot: Spot) {
+  fishTarget.value = spot
+  fishDetail.value = {
+    yes: spot.fishYes ?? 0,
+    no: spot.fishNo ?? 0,
+    limit: 5,
+    hidden: !!spot.fishHidden,
+    list: [],
+  }
+  showFish.value = true
+  fishLoading.value = true
+  try {
+    fishDetail.value = await api.spotFishability(spot.id)
+  } finally {
+    fishLoading.value = false
+  }
+}
+
+/** 反馈结论文案 */
+function verdictLabel(v: string) {
+  return v === 'yes' ? '可以作钓' : '无法作钓'
+}
+
+/** 反馈结论标签色 */
+function verdictTagType(v: string): TagType {
+  return v === 'yes' ? 'success' : 'error'
 }
 
 /**
@@ -189,6 +332,11 @@ const form = reactive({
   name: '',
   city: '',
   coords: '',
+  address: '',
+  water: '',
+  bottom: '',
+  crowd: '',
+  note: '',
   pay: '免费', // 收费说明，默认免费
   fish: '',
   status: true, // 上架开关，true=online
@@ -209,6 +357,11 @@ function openCreate() {
   form.name = ''
   form.city = ''
   form.coords = ''
+  form.address = ''
+  form.water = ''
+  form.bottom = ''
+  form.crowd = ''
+  form.note = ''
   form.pay = '免费'
   form.fish = ''
   form.status = true
@@ -227,6 +380,11 @@ function openEdit(s: Spot) {
   form.name = s.name
   form.city = s.city ?? ''
   form.coords = s.coords ?? ''
+  form.address = s.address ?? ''
+  form.water = s.water ?? ''
+  form.bottom = s.bottom ?? ''
+  form.crowd = s.crowd ?? ''
+  form.note = s.note ?? ''
   form.pay = s.pay ?? '免费'
   form.fish = (s.fish ?? []).join(', ')
   form.status = s.status === 'online'
@@ -295,6 +453,11 @@ async function save() {
     name: form.name.trim(),
     city: form.city.trim() || undefined,
     coords: form.coords.trim() || undefined,
+    address: form.address.trim() || undefined,
+    water: form.water.trim() || undefined,
+    bottom: form.bottom.trim() || undefined,
+    crowd: form.crowd.trim() || undefined,
+    note: form.note.trim() || undefined,
     pay: form.pay.trim() || '免费',
     fish: form.fish.split(/[,，]/).map((s) => s.trim()).filter(Boolean),
     gallery: finalGallery.value,
@@ -411,6 +574,35 @@ onMounted(load)
                 <n-tag size="small" round :color="payTag(s.pay).color" :text-color="payTag(s.pay).textColor">
                   {{ s.pay ?? '—' }}
                 </n-tag>
+                <n-tag
+                  v-if="s.source"
+                  size="tiny"
+                  round
+                  :bordered="false"
+                  :type="sourceTagType(s.source)"
+                >
+                  {{ sourceLabel(s.source) }}
+                </n-tag>
+                <n-tag
+                  size="tiny"
+                  round
+                  :bordered="false"
+                  :type="verifiedTagType(s.verifiedLevel)"
+                >
+                  {{ verifiedLabel(s.verifiedLevel) }}
+                </n-tag>
+                <n-tag
+                  size="tiny"
+                  round
+                  :bordered="false"
+                  :type="s.fishNo > 0 ? 'warning' : 'default'"
+                  :title="`可以作钓 ${s.fishYes} 人 / 无法作钓 ${s.fishNo} 人`"
+                >
+                  可钓 {{ s.fishYes }} · 无法 {{ s.fishNo }}
+                </n-tag>
+                <n-tag v-if="s.fishHidden" size="tiny" round :bordered="false" type="error">
+                  已隐藏
+                </n-tag>
               </div>
               <div class="spot-card__sub">{{ s.city ?? '—' }}{{ s.coords ? ` · ${s.coords}` : '' }}</div>
               <div class="spot-card__fish">
@@ -439,23 +631,41 @@ onMounted(load)
 
             <div class="spot-card__right">
               <div class="spot-card__by">{{ s.addedBy }} · {{ s.createdAt }}</div>
-              <div class="rowbtns" style="margin-top: 6px">
+              <div class="rowbtns" style="margin-top: 6px; flex-wrap: wrap">
                 <n-button
                   size="small"
                   :type="s.status === 'online' ? 'warning' : 'primary'"
                   :quaternary="s.status === 'online'"
-                  @click="toggle(s)"
+                  @click="openStatus(s)"
                 >
                   <template #icon>
                     <n-icon :component="s.status === 'online' ? RemoveOutline : CheckmarkOutline" />
                   </template>
-                  {{ s.status === 'online' ? '下架' : '上架' }}
+                  {{ s.status === 'online' ? '下架' : '恢复' }}
                 </n-button>
                 <n-button size="small" @click="openEdit(s)">
                   <template #icon>
                     <n-icon :component="CreateOutline" />
                   </template>
                   编辑
+                </n-button>
+                <n-button size="small" @click="openCoord(s)">
+                  <template #icon>
+                    <n-icon :component="MapOutline" />
+                  </template>
+                  校正坐标
+                </n-button>
+                <n-button size="small" quaternary @click="openHistory(s)">
+                  <template #icon>
+                    <n-icon :component="TimeOutline" />
+                  </template>
+                  历史
+                </n-button>
+                <n-button size="small" quaternary @click="openFish(s)">
+                  <template #icon>
+                    <n-icon :component="ChatbubbleEllipsesOutline" />
+                  </template>
+                  反馈
                 </n-button>
                 <n-button size="small" type="error" quaternary @click="confirmDelete(s)">
                   <template #icon>
@@ -481,6 +691,7 @@ onMounted(load)
       preset="card"
       :title="isEdit ? '编辑钓点' : '新增钓点'"
       style="width: 680px"
+      content-style="max-height: 62vh; overflow-y: auto"
       :mask-closable="false"
     >
       <div class="form-grid">
@@ -525,13 +736,33 @@ onMounted(load)
               <n-input v-model:value="form.city" placeholder="如：杭州市 西湖区" />
             </n-form-item>
             <n-form-item label="坐标">
-              <n-input v-model:value="form.coords" placeholder="如：30.2413°N, 120.1032°E" />
+              <n-input v-model:value="form.coords" placeholder="如：120.1032,30.2413（lng,lat）" />
+            </n-form-item>
+            <n-form-item label="详细地址">
+              <n-input v-model:value="form.address" placeholder="如：XX 路与 XX 路交叉口东侧" />
+            </n-form-item>
+            <n-form-item label="水域">
+              <n-input v-model:value="form.water" placeholder="如：野水域 / 黑坑 / 水库" />
+            </n-form-item>
+            <n-form-item label="水底">
+              <n-input v-model:value="form.bottom" placeholder="如：泥底 / 石底 / 未知" />
+            </n-form-item>
+            <n-form-item label="人流">
+              <n-input v-model:value="form.crowd" placeholder="如：较多 / 一般 / 较少" />
             </n-form-item>
             <n-form-item label="收费">
               <n-input v-model:value="form.pay" placeholder="如：免费 / 收费 20 元/天" />
             </n-form-item>
             <n-form-item label="鱼种（逗号分隔）">
               <n-input v-model:value="form.fish" placeholder="如：鲫鱼, 鲤鱼, 白条" />
+            </n-form-item>
+            <n-form-item label="钓点说明" class="full">
+              <n-input
+                v-model:value="form.note"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 4 }"
+                placeholder="补充说明（可选）"
+              />
             </n-form-item>
             <n-form-item label="状态">
               <n-switch v-model:value="form.status" />
@@ -545,6 +776,165 @@ onMounted(load)
         <div style="display: flex; justify-content: flex-end; gap: 10px">
           <n-button @click="showModal = false">取消</n-button>
           <n-button type="primary" :loading="saving" @click="save">保存</n-button>
+        </div>
+      </template>
+    </n-modal>
+
+    <!-- 区块：校正坐标弹窗 / 输入新坐标与原因，调用坐标校正接口 -->
+    <n-modal
+      v-model:show="showCoord"
+      preset="card"
+      title="校正坐标"
+      style="width: 480px"
+      content-style="max-height: 68vh; overflow-y: auto"
+      :mask-closable="false"
+    >
+      <n-form label-placement="top">
+        <n-form-item :label="`钓点：${coordTarget?.name ?? ''}`">
+          <span class="td-s">当前坐标：{{ coordTarget?.coords || '—' }}</span>
+        </n-form-item>
+        <n-form-item label="新坐标（lng,lat）" required>
+          <n-input v-model:value="coordForm.coords" placeholder="如：120.15,30.28" />
+        </n-form-item>
+        <n-form-item label="地图选点（点击落点 / 拖动标记，与上方文本同步）">
+          <CoordPicker v-model="coordForm.coords" :height="300" />
+        </n-form-item>
+        <n-form-item label="校正原因" required>
+          <n-input
+            v-model:value="coordForm.reason"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 4 }"
+            placeholder="如：现场实测坐标 / 用户纠错核实"
+          />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <div style="display: flex; justify-content: flex-end; gap: 10px">
+          <n-button @click="showCoord = false">取消</n-button>
+          <n-button type="primary" :loading="coordSaving" @click="saveCoord">保存坐标</n-button>
+        </div>
+      </template>
+    </n-modal>
+
+    <!-- 区块：坐标变更历史弹窗 -->
+    <n-modal
+      v-model:show="showHistory"
+      preset="card"
+      :title="`坐标历史 · ${historyTarget?.name ?? ''}`"
+      style="width: 680px"
+    >
+      <n-spin :show="historyLoading">
+        <n-table v-if="historyRows.length" size="small" :bordered="false">
+          <thead>
+            <tr>
+              <th style="width: 140px">时间</th>
+              <th>坐标变更</th>
+              <th style="width: 160px">原因</th>
+              <th style="width: 80px">来源</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="h in historyRows" :key="h.id">
+              <td class="td-s">{{ h.createdAt || '—' }}</td>
+              <td class="num">{{ h.oldCoord || '—' }} → {{ h.newCoord || '—' }}</td>
+              <td>{{ h.reason || '—' }}</td>
+              <td>{{ h.source || '—' }}</td>
+            </tr>
+          </tbody>
+        </n-table>
+        <div v-else-if="!historyLoading" class="td-s" style="padding: 12px 0">
+          暂无坐标变更记录
+        </div>
+      </n-spin>
+      <template #footer>
+        <div style="display: flex; justify-content: flex-end">
+          <n-button @click="showHistory = false">关闭</n-button>
+        </div>
+      </template>
+    </n-modal>
+
+    <!-- 区块：钓况反馈弹窗 / 统计汇总 + 逐条反馈记录 / 「无法作钓」达阈值后钓点不再对外展示 -->
+    <n-modal
+      v-model:show="showFish"
+      preset="card"
+      :title="`钓况反馈 · ${fishTarget?.name ?? ''}`"
+      style="width: 680px"
+    >
+      <n-spin :show="fishLoading">
+        <div class="fish-summary">
+          <n-tag type="success" :bordered="false" round>可以作钓 {{ fishDetail.yes }}</n-tag>
+          <n-tag type="error" :bordered="false" round>无法作钓 {{ fishDetail.no }}</n-tag>
+          <n-tag v-if="fishDetail.hidden" type="error" :bordered="false" round>
+            已达 {{ fishDetail.limit }} 人阈值，已隐藏
+          </n-tag>
+          <n-tag v-else type="default" :bordered="false" round>
+            距隐藏阈值还差 {{ Math.max(0, fishDetail.limit - fishDetail.no) }} 人
+          </n-tag>
+        </div>
+        <n-table v-if="fishDetail.list.length" size="small" :bordered="false">
+          <thead>
+            <tr>
+              <th style="width: 180px">反馈用户</th>
+              <th style="width: 110px">结论</th>
+              <th style="width: 140px">最近反馈时间</th>
+              <th>用户号</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="f in fishDetail.list" :key="f.id">
+              <td>{{ f.user }}</td>
+              <td>
+                <n-tag size="small" :type="verdictTagType(f.verdict)" :bordered="false" round>
+                  {{ verdictLabel(f.verdict) }}
+                </n-tag>
+              </td>
+              <td class="td-s">{{ f.updatedAt || f.createdAt || '—' }}</td>
+              <td class="td-s">{{ f.uid || '—' }}</td>
+            </tr>
+          </tbody>
+        </n-table>
+        <div v-else-if="!fishLoading" class="td-s" style="padding: 12px 0">
+          暂无钓友反馈
+        </div>
+      </n-spin>
+      <template #footer>
+        <div style="display: flex; justify-content: flex-end">
+          <n-button @click="showFish = false">关闭</n-button>
+        </div>
+      </template>
+    </n-modal>
+
+    <!-- 区块：下架 / 恢复弹窗 / 下架时可填写原因 -->
+    <n-modal
+      v-model:show="showStatus"
+      preset="card"
+      :title="statusTarget?.status === 'online' ? '下架钓点' : '恢复上架'"
+      style="width: 440px"
+      :mask-closable="false"
+    >
+      <n-form label-placement="top">
+        <n-form-item label="钓点">
+          <span>{{ statusTarget?.name }}</span>
+        </n-form-item>
+        <n-form-item v-if="statusTarget?.status === 'online'" label="下架原因">
+          <n-input
+            v-model:value="statusReason"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 3 }"
+            placeholder="如：水域禁钓 / 信息失效（可选）"
+          />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <div style="display: flex; justify-content: flex-end; gap: 10px">
+          <n-button @click="showStatus = false">取消</n-button>
+          <n-button
+            :type="statusTarget?.status === 'online' ? 'warning' : 'primary'"
+            :loading="statusSaving"
+            @click="saveStatus"
+          >
+            {{ statusTarget?.status === 'online' ? '确认下架' : '确认恢复' }}
+          </n-button>
         </div>
       </template>
     </n-modal>
@@ -572,5 +962,14 @@ onMounted(load)
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 6px;
+}
+
+/* 钓况反馈弹窗：统计标签横向排列，与明细表留出间距 */
+.fish-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 </style>

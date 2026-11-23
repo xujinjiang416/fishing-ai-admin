@@ -201,10 +201,179 @@ export interface Spot {
   cover: string | null
   /** 图集 URL 列表 */
   gallery: string[]
+  /** 详细地址，可为 null */
+  address?: string | null
+  /** 水域类型（如「野水域」「黑坑」），可为 null */
+  water?: string | null
+  /** 水底地形，可为 null */
+  bottom?: string | null
+  /** 人流情况，可为 null */
+  crowd?: string | null
+  /** 钓点说明，可为 null */
+  note?: string | null
+  /** 数据来源：ai AI 生成 / admin 后台维护 / ugc 用户投稿 */
+  source?: string
+  /** 核实等级：unverified / user_verified / verified */
+  verifiedLevel?: string
+  /** 最近核实时间，可为空串 */
+  lastVerifiedAt?: string
+  /** 下架原因，可为 null */
+  offlineReason?: string | null
   /** 添加人（管理员或用户昵称） */
   addedBy: string
   /** 创建时间（日期字符串） */
   createdAt: string
+  /** 反馈「可以正常作钓」的人数 */
+  fishYes: number
+  /** 反馈「无法正常作钓」的人数 */
+  fishNo: number
+  /** 是否已因「无法作钓」人数达到阈值而不再对外展示 */
+  fishHidden: boolean
+}
+
+/**
+ * 钓点投稿（后台「钓点审核」列表项）
+ */
+export interface SpotSubmission {
+  /** 投稿 ID */
+  id: string
+  /** 投稿类型：new_spot 新增 / update_spot 更新 */
+  kind: string
+  /** 审核状态：pending / reviewing / needs_info / approved / rejected / merged / withdrawn */
+  status: string
+  /** 钓点名称，可为 null */
+  name: string | null
+  /** 行政区文案，可为 null */
+  region: string | null
+  /** 坐标 "lng,lat"，可为 null */
+  coord: string | null
+  /** 详细地址，可为 null */
+  address: string | null
+  /** 水域类型，可为 null */
+  water: string | null
+  /** 鱼种名称列表 */
+  fish: string[]
+  /** 收费说明，可为 null */
+  pay: string | null
+  /** 投稿说明，可为 null */
+  note: string | null
+  /** 现场照片 URL 列表 */
+  photos: string[]
+  /** 封面图 URL，可为 null */
+  cover: string | null
+  /** 风险标记（duplicate_nearby / name_missing / note_short 等） */
+  riskFlags: string[]
+  /** 疑似重复的钓点/投稿 ID，可为 null */
+  duplicateOf: string | null
+  /** 审核备注，可为 null */
+  reviewNote: string | null
+  /** 审核通过后发布的钓点 ID，可为 null */
+  publishedSpotId: string | null
+  /** 提交时间 */
+  createdAt: string
+  /** 审核时间，未审核为空串 */
+  reviewedAt: string
+}
+
+/** 投稿审核详情：在列表项基础上追加投稿人、统计与疑似重复钓点 */
+export interface SpotSubmissionDetail extends SpotSubmission {
+  /** 投稿用户信息，用户被删除时为 null */
+  user: { id: number; nickname: string; uid: string } | null
+  /** 该用户的投稿统计 */
+  userStats: { total: number; approved: number }
+  /** 坐标相近的已发布钓点 */
+  duplicates: { id: string; name: string; coord: string | null; distanceKm: number }[]
+}
+
+/** 钓点纠错 / 举报（后台「纠错处理」列表项） */
+export interface SpotReport {
+  /** 纠错记录 ID */
+  id: string
+  /** 关联钓点 ID */
+  spotId: string
+  /** 问题类型：wrong_location / closed / dry / fee_changed / duplicate / prohibited / other */
+  reportType: string
+  /** 用户建议的新坐标 "lng,lat"，可为 null */
+  proposedCoord: string | null
+  /** 佐证照片 URL 列表 */
+  photos: string[]
+  /** 问题说明，可为 null */
+  note: string | null
+  /** 处理状态：pending / accepted / rejected */
+  status: string
+  /** 处理备注，可为 null */
+  reviewNote: string | null
+  /** 提交时间 */
+  createdAt: string
+  /** 处理时间，未处理为空串 */
+  reviewedAt: string
+}
+
+/** 钓点坐标变更历史 */
+export interface SpotCoordHistory {
+  /** 记录 ID */
+  id: number
+  /** 变更前坐标，可为 null */
+  oldCoord: string | null
+  /** 变更后坐标，可为 null */
+  newCoord: string | null
+  /** 变更原因，可为 null */
+  reason: string | null
+  /** 来源：admin / report 等 */
+  source: string | null
+  /** 操作管理员 ID，可为 null */
+  operatorId: number | null
+  /** 变更时间 */
+  createdAt: string
+}
+
+/** 钓点钓况反馈明细（后台「反馈」弹窗） */
+export interface SpotFishabilityDetail {
+  /** 「可以作钓」人数 */
+  yes: number
+  /** 「无法作钓」人数 */
+  no: number
+  /** 触发不再展示的阈值 */
+  limit: number
+  /** 是否已达阈值、不再对外展示 */
+  hidden: boolean
+  /** 反馈记录列表（按更新时间倒序） */
+  list: {
+    id: number
+    userId: number
+    /** 用户昵称，用户已注销时显示「已注销用户」 */
+    user: string
+    /** 业务用户号，可为空串 */
+    uid: string
+    /** 反馈结论：yes / no */
+    verdict: string
+    /** 首次反馈时间 */
+    createdAt: string
+    /** 最近一次修改时间 */
+    updatedAt: string
+  }[]
+}
+
+/** 坐标校正结果 */
+export interface CoordUpdateResult {
+  /** 钓点 ID */
+  id: string
+  /** 新坐标 */
+  coord: string
+  /** 旧坐标，可为 null */
+  oldCoord: string | null
+  /** 偏移距离（公里） */
+  distanceKm: number
+}
+
+/** 钓点上下架结果 */
+export interface SpotStatusResult {
+  /** 钓点 ID */
+  id: string
+  /** 变更后的状态：online / offline */
+  status: string
+  /** 下架原因，恢复上架时为 null */
+  offlineReason: string | null
 }
 
 /**
@@ -915,6 +1084,103 @@ export const api = {
    * @returns {Promise<{deleted: number}>} 实际删除条数
    */
   batchDeleteSpots: (ids: string[]) => post<{ deleted: number }>('/admin/spots/batch-delete', { ids }),
+  /**
+   * 人工校正钓点坐标（POST /admin/spots/{id}/coord）
+   * @param {string} id 钓点 ID
+   * @param {{coords: string; reason: string}} data 新坐标 "lng,lat" 与变更原因
+   * @returns {Promise<CoordUpdateResult>} 校正后的坐标与偏移距离
+   */
+  updateSpotCoord: (id: string, data: { coords: string; reason: string }) =>
+    post<CoordUpdateResult>(`/admin/spots/${id}/coord`, data),
+  /**
+   * 钓点坐标变更历史（GET /admin/spots/{id}/history）
+   * @param {string} id 钓点 ID
+   * @returns {Promise<SpotCoordHistory[]>} 按时间倒序的历史记录
+   */
+  spotHistory: (id: string) => get<SpotCoordHistory[]>(`/admin/spots/${id}/history`),
+  /**
+   * 钓点钓况反馈明细（GET /admin/spots/{id}/fishability）
+   * @param {string} id 钓点 ID
+   * @returns {Promise<SpotFishabilityDetail>} 反馈统计与逐条记录
+   */
+  spotFishability: (id: string) => get<SpotFishabilityDetail>(`/admin/spots/${id}/fishability`),
+  /**
+   * 切换钓点上下架（POST /admin/spots/{id}/status）
+   * @param {string} id 钓点 ID
+   * @param {string} [reason] 下架原因，恢复上架时可省略
+   * @returns {Promise<SpotStatusResult>} 变更后的状态与下架原因
+   */
+  toggleSpotStatus: (id: string, reason?: string) =>
+    post<SpotStatusResult>(`/admin/spots/${id}/status`, { reason }),
+
+  // ---------- 钓点审核 · 用户投稿 ----------
+  /**
+   * 投稿审核分页列表（GET /admin/spot-submissions）
+   * @param {{status?: string; city?: string; keyword?: string; page: number; pageSize: number}} params 状态/城市/关键词与分页
+   * @returns {Promise<Page<SpotSubmission>>} 分页投稿数据
+   */
+  spotSubmissions: (params: {
+    status?: string
+    city?: string
+    keyword?: string
+    page: number
+    pageSize: number
+  }) => get<Page<SpotSubmission>>('/admin/spot-submissions', params),
+  /**
+   * 投稿审核详情（GET /admin/spot-submissions/{id}）
+   * @param {string} id 投稿 ID
+   * @returns {Promise<SpotSubmissionDetail>} 投稿详情、投稿人统计与疑似重复钓点
+   */
+  spotSubmission: (id: string) => get<SpotSubmissionDetail>(`/admin/spot-submissions/${id}`),
+  /**
+   * 审核通过并发布钓点（POST /admin/spot-submissions/{id}/approve）
+   * @param {string} id 投稿 ID
+   * @param {string} [note] 审核备注
+   * @returns {Promise<{submission: SpotSubmission; spotId: string}>} 投稿状态与新钓点 ID
+   */
+  approveSubmission: (id: string, note?: string) =>
+    post<{ submission: SpotSubmission; spotId: string }>(`/admin/spot-submissions/${id}/approve`, { note }),
+  /**
+   * 驳回投稿（POST /admin/spot-submissions/{id}/reject）
+   * @param {string} id 投稿 ID
+   * @param {string} [note] 驳回原因
+   * @returns {Promise<SpotSubmission>} 更新后的投稿
+   */
+  rejectSubmission: (id: string, note?: string) =>
+    post<SpotSubmission>(`/admin/spot-submissions/${id}/reject`, { note }),
+  /**
+   * 要求补充材料（POST /admin/spot-submissions/{id}/request-info）
+   * @param {string} id 投稿 ID
+   * @param {string} [note] 补充说明
+   * @returns {Promise<SpotSubmission>} 更新后的投稿
+   */
+  requestSubmissionInfo: (id: string, note?: string) =>
+    post<SpotSubmission>(`/admin/spot-submissions/${id}/request-info`, { note }),
+  /**
+   * 合并投稿到已有钓点（POST /admin/spot-submissions/{id}/merge）
+   * @param {string} id 投稿 ID
+   * @param {{spotId: string; note?: string}} data 目标钓点 ID 与备注
+   * @returns {Promise<SpotSubmission>} 更新后的投稿（状态 merged）
+   */
+  mergeSubmission: (id: string, data: { spotId: string; note?: string }) =>
+    post<SpotSubmission>(`/admin/spot-submissions/${id}/merge`, { spot_id: data.spotId, note: data.note }),
+
+  // ---------- 钓点审核 · 纠错处理 ----------
+  /**
+   * 纠错/举报分页列表（GET /admin/spot-reports）
+   * @param {{status?: string; page: number; pageSize: number}} params 状态与分页
+   * @returns {Promise<Page<SpotReport>>} 分页纠错数据
+   */
+  spotReports: (params: { status?: string; page: number; pageSize: number }) =>
+    get<Page<SpotReport>>('/admin/spot-reports', params),
+  /**
+   * 处理纠错/举报（POST /admin/spot-reports/{id}/resolve）
+   * @param {string} id 纠错记录 ID
+   * @param {{accept: boolean; offline: boolean; note?: string}} data 是否接受、是否下架与备注
+   * @returns {Promise<SpotReport>} 处理后的纠错记录
+   */
+  resolveReport: (id: string, data: { accept: boolean; offline: boolean; note?: string }) =>
+    post<SpotReport>(`/admin/spot-reports/${id}/resolve`, data),
 
   /**
    * 上传文件（POST /admin/upload，multipart/form-data）
