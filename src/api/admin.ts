@@ -269,6 +269,10 @@ export interface SpotSubmission {
   reviewNote: string | null
   /** 审核通过后发布的钓点 ID，可为 null */
   publishedSpotId: string | null
+  /** 1 天会员奖励发放时间，未发放为空串 */
+  rewardedAt: string
+  /** 奖励发放后的会员到期日，未发放为空串 */
+  rewardExpire: string
   /** 提交时间 */
   createdAt: string
   /** 审核时间，未审核为空串 */
@@ -281,8 +285,16 @@ export interface SpotSubmissionDetail extends SpotSubmission {
   user: { id: number; nickname: string; uid: string } | null
   /** 该用户的投稿统计 */
   userStats: { total: number; approved: number }
-  /** 坐标相近的已发布钓点 */
-  duplicates: { id: string; name: string; coord: string | null; distanceKm: number }[]
+  /** 100 米内的有效已发布钓点，按距离升序 */
+  duplicates: {
+    id: string
+    name: string
+    coord: string | null
+    address: string | null
+    region: string | null
+    distanceM: number
+    distanceKm: number
+  }[]
 }
 
 /** 钓点纠错 / 举报（后台「纠错处理」列表项） */
@@ -444,14 +456,16 @@ export interface PointsConfig {
   checkinMemberPoints: number
   /** 普通用户每日签到奖励积分 */
   checkinNormalPoints: number
-  /** 观看一次广告奖励积分 */
+  /** 观看一次广告奖励积分；展示次数与时长由微信流量主规范控制 */
   adPoints: number
-  /** 广告需完整观看的时长（秒） */
-  adSeconds: number
-  /** 普通用户每日广告奖励次数上限 */
-  adLimitNormal: number
-  /** 会员每日广告奖励次数上限 */
-  adLimitMember: number
+  /** 单笔订单积分抵扣全局上限（分） */
+  pointsGlobalCap: number
+  /** 非会员单用户自然月获取上限 */
+  pointsMonthlyCapNormal: number
+  /** 会员单用户自然月获取上限 */
+  pointsMonthlyCapMember: number
+  /** 会员权益服务端校验开关：1 开 / 0 关 */
+  entitlementEnforcement: number
   /** 自定义评论敏感词（英文逗号分隔），留空表示使用内置词库 */
   sensitiveWords: string
   /** 配置项元数据（名称 / 说明 / 取值范围），供表单渲染 */
@@ -465,6 +479,63 @@ export interface PointsConfig {
     /** 允许的最大值，null 表示不限制 */
     max: number | null
   }[]
+}
+
+/** 积分总览 */
+export interface PointsOverview {
+  days: number
+  kpi: {
+    issuedPoints: number
+    spentPoints: number
+    refundedPoints: number
+    balancePoints: number
+    liabilityYuan: number
+    issuedValue: number
+    spentValue: number
+    redemptionRate: number
+    pointsCostRate: number
+    memberPointsCostRate: number
+    gmv: number
+    membershipRevenue: number
+  }
+  trend: { days: string[]; issued: number[]; spent: number[] }
+  sources: { source: string; earned: number; spent: number; count: number }[]
+  topUsers: { userId: number; nickname: string; points: number; value: number }[]
+  liability: {
+    balancePoints: number
+    batchRemaining: number
+    liabilityYuan: number
+    today: string
+  }
+  alerts: string[]
+}
+
+/** 积分流水（后台） */
+export interface AdminPointsLog {
+  id: number
+  userId: number
+  nickname: string
+  change: number
+  reason: string
+  source: string
+  scene: string
+  channel: string
+  refId: string
+  batchId: number | null
+  balance: number
+  operator: string
+  date: string
+}
+
+/** 积分批次（后台） */
+export interface AdminPointsBatch {
+  id: number
+  userId: number
+  nickname: string
+  source: string
+  amount: number
+  remaining: number
+  createdAt: string
 }
 
 /** 评论（后台「内容管理 · 评论管理」） */
@@ -1205,6 +1276,45 @@ export const api = {
    * @returns {Promise<PointsConfig>} 更新后的完整配置
    */
   updateConfig: (data: Record<string, unknown>) => put<PointsConfig>('/admin/config', data),
+
+  // ---------- 积分管理 ----------
+  pointsOverview: (days = 30) => get<PointsOverview>('/admin/points/overview', { days }),
+  pointsLogs: (params: {
+    userId?: number
+    source?: string
+    scene?: string
+    dateFrom?: string
+    dateTo?: string
+    page: number
+    pageSize: number
+  }) => get<Page<AdminPointsLog>>('/admin/points/logs', params),
+  pointsBatches: (params: { userId?: number; activeOnly?: boolean; page: number; pageSize: number }) =>
+    get<Page<AdminPointsBatch>>('/admin/points/batches', params),
+  pointsLiability: () => get<PointsOverview['liability']>('/admin/points/liability'),
+  pointsExportUrl: (params?: { userId?: number; source?: string; dateFrom?: string; dateTo?: string }) => {
+    const qs = new URLSearchParams()
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    return `/api/admin/points/export${qs.toString() ? '?' + qs.toString() : ''}`
+  },
+
+  // ---------- 行为分析 ----------
+  analyticsSummary: (days = 30) =>
+    get<{ days: number; events: { event: string; count: number; users: number }[] }>(
+      '/admin/analytics/summary',
+      { days },
+    ),
+  analyticsFunnel: (name = 'membership', days = 30) =>
+    get<{ name: string; days: number; steps: { step: string; users: number; count: number; rate: number }[] }>(
+      '/admin/analytics/funnel',
+      { name, days },
+    ),
+  analyticsRetention: (days = 30) =>
+    get<{ days: number; cohorts: { cohort: string; users: number; d1: number; d7: number; d30: number }[] }>(
+      '/admin/analytics/retention',
+      { days },
+    ),
 
   // ---------- 内容管理 · 评论管理 ----------
   /**

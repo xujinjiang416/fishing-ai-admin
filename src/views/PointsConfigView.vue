@@ -4,7 +4,7 @@
  *
  * 功能（对应需求 4）：
  * - 可视化配置「签到领取积分」的 会员值 / 非会员值；
- * - 配置「观看广告赚取积分」的单次积分值（以及广告时长、每日额度）；
+ * - 配置「观看广告赚取积分」的单次积分值；广告展示次数与时长遵循微信流量主规范；
  * - 可选配置评论敏感词词库；
  * - 保存后写入后端 app_configs 表，实时生效（小程序端拉取到最新配置），并记录操作日志。
  *
@@ -32,12 +32,13 @@ const form = reactive({
   checkinNormalPoints: 1,
   // 单次观看广告奖励积分，默认 5，范围 0~100000
   adPoints: 5,
-  // 单次广告播放时长（秒），默认 30，范围 5~180
-  adSeconds: 30,
-  // 非会员每日广告观看上限（条），默认 15，范围 0~1000
-  adLimitNormal: 15,
-  // 会员每日广告观看上限（条），默认 20，范围 0~1000
-  adLimitMember: 20,
+  // 单笔订单积分抵扣全局上限（分）
+  pointsGlobalCap: 1500,
+  // 非会员 / 会员单用户自然月获取上限
+  pointsMonthlyCapNormal: 2000,
+  pointsMonthlyCapMember: 2000,
+  // 会员权益服务端校验开关：1 开 / 0 关
+  entitlementEnforcement: 1,
   // 自定义评论敏感词（英文逗号分隔），默认空串表示使用内置词库
   sensitiveWords: '',
 })
@@ -54,9 +55,10 @@ async function load() {
     form.checkinMemberPoints = cfg.checkinMemberPoints
     form.checkinNormalPoints = cfg.checkinNormalPoints
     form.adPoints = cfg.adPoints
-    form.adSeconds = cfg.adSeconds
-    form.adLimitNormal = cfg.adLimitNormal
-    form.adLimitMember = cfg.adLimitMember
+    form.pointsGlobalCap = cfg.pointsGlobalCap
+    form.pointsMonthlyCapNormal = cfg.pointsMonthlyCapNormal
+    form.pointsMonthlyCapMember = cfg.pointsMonthlyCapMember
+    form.entitlementEnforcement = cfg.entitlementEnforcement
     form.sensitiveWords = cfg.sensitiveWords || ''
   } finally {
     loading.value = false
@@ -77,9 +79,10 @@ async function save() {
       checkinMemberPoints: form.checkinMemberPoints,
       checkinNormalPoints: form.checkinNormalPoints,
       adPoints: form.adPoints,
-      adSeconds: form.adSeconds,
-      adLimitNormal: form.adLimitNormal,
-      adLimitMember: form.adLimitMember,
+      pointsGlobalCap: form.pointsGlobalCap,
+      pointsMonthlyCapNormal: form.pointsMonthlyCapNormal,
+      pointsMonthlyCapMember: form.pointsMonthlyCapMember,
+      entitlementEnforcement: form.entitlementEnforcement,
       sensitiveWords: form.sensitiveWords,
     })
     message.success('配置已保存并实时生效')
@@ -147,7 +150,7 @@ onMounted(load)
         </div>
       </div>
 
-      <!-- 区块：广告积分 / 四列配置项（单次积分、广告时长、非会员与会员每日额度） -->
+      <!-- 区块：广告积分 / 仅配置单次奖励；展示次数与时长由微信流量主规范控制 -->
       <div class="card card--pad" style="margin-bottom: 14px">
         <div class="card__title" style="margin-bottom: 14px">观看广告赚取积分</div>
         <div class="config-grid">
@@ -158,36 +161,40 @@ onMounted(load)
             </div>
             <n-input-number v-model:value="form.adPoints" class="config-item__input" :min="0" :max="100000" />
           </div>
+        </div>
+      </div>
+
+      <!-- 区块：成本闸门 / 全局上限、月上限与权益校验；积分永久有效 -->
+      <div class="card card--pad" style="margin-bottom: 14px">
+        <div class="card__title" style="margin-bottom: 14px">积分成本</div>
+        <div class="config-grid">
           <div class="config-item">
             <div>
-              <div class="config-item__label">单次广告时长（秒）</div>
-              <div class="config-item__desc">广告播放时长，影响观看体验</div>
+              <div class="config-item__label">单笔抵扣全局上限（分）</div>
+              <div class="config-item__desc">1500 分 = 10 元；不再按品类设置抵扣率，足额抵扣可 0 元购</div>
             </div>
-            <n-input-number v-model:value="form.adSeconds" class="config-item__input" :min="5" :max="180" />
+            <n-input-number v-model:value="form.pointsGlobalCap" class="config-item__input" :min="0" :max="100000" />
           </div>
           <div class="config-item">
             <div>
-              <div class="config-item__label">非会员每日广告额度</div>
-              <div class="config-item__desc">非会员每日最多可观看的广告条数</div>
+              <div class="config-item__label">非会员月获取上限</div>
+              <div class="config-item__desc">单用户自然月最多获得积分</div>
             </div>
-            <n-input-number
-              v-model:value="form.adLimitNormal"
-              class="config-item__input"
-              :min="0"
-              :max="1000"
-            />
+            <n-input-number v-model:value="form.pointsMonthlyCapNormal" class="config-item__input" :min="0" :max="1000000" />
           </div>
           <div class="config-item">
             <div>
-              <div class="config-item__label">会员每日广告额度</div>
-              <div class="config-item__desc">会员每日最多可观看的广告条数</div>
+              <div class="config-item__label">会员月获取上限</div>
+              <div class="config-item__desc">单用户自然月最多获得积分</div>
             </div>
-            <n-input-number
-              v-model:value="form.adLimitMember"
-              class="config-item__input"
-              :min="0"
-              :max="1000"
-            />
+            <n-input-number v-model:value="form.pointsMonthlyCapMember" class="config-item__input" :min="0" :max="1000000" />
+          </div>
+          <div class="config-item">
+            <div>
+              <div class="config-item__label">会员权益服务端校验</div>
+              <div class="config-item__desc">开启后，非会员全量天气/钓点请求会被服务端拦截</div>
+            </div>
+            <n-switch v-model:value="form.entitlementEnforcement" :checked-value="1" :unchecked-value="0" />
           </div>
         </div>
       </div>

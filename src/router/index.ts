@@ -56,6 +56,11 @@ const router = createRouter({
           meta: { title: '积分商城' },
         },
         {
+          path: 'points',
+          component: () => import('@/views/PointsView.vue'),
+          meta: { title: '积分管理' },
+        },
+        {
           path: 'orders',
           component: () => import('@/views/OrdersView.vue'),
           meta: { title: '订单管理' },

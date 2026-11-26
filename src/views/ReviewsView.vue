@@ -432,6 +432,8 @@ onMounted(load)
             </n-descriptions-item>
             <n-descriptions-item label="审核时间">{{ detail.reviewedAt || '—' }}</n-descriptions-item>
             <n-descriptions-item label="发布钓点">{{ detail.publishedSpotId || '—' }}</n-descriptions-item>
+            <n-descriptions-item label="奖励发放">{{ detail.rewardedAt || '—' }}</n-descriptions-item>
+            <n-descriptions-item label="奖励后到期">{{ detail.rewardExpire || '—' }}</n-descriptions-item>
             <n-descriptions-item label="疑似重复">{{ detail.duplicateOf || '—' }}</n-descriptions-item>
           </n-descriptions>
 
@@ -465,18 +467,22 @@ onMounted(load)
           </n-descriptions>
 
           <div class="rv-title">疑似重复钓点（{{ detail.duplicates.length }}）</div>
+          <n-alert v-if="detail.duplicates.length" type="warning" :show-icon="true" style="margin-bottom: 10px">
+            发现 {{ detail.duplicates.length }} 个直线距离 100 米以内的有效钓点，请优先核对是否重复。
+          </n-alert>
           <div v-if="detail.duplicates.length" class="rv-dups">
             <div v-for="d in detail.duplicates" :key="d.id" class="rv-dup">
               <div class="td-sub" style="min-width: 0">
                 <span class="td-t">{{ d.name }}</span>
-                <span class="td-s">{{ d.id }} · {{ d.coord || '—' }} · {{ d.distanceKm }} km</span>
+                <span class="td-s">{{ d.id }} · {{ d.coord || '—' }} · 直线距离 {{ d.distanceM }} 米</span>
+                <span class="td-s">{{ d.address || d.region || '地址未填写' }}</span>
               </div>
               <n-button size="tiny" type="primary" quaternary @click="openMerge(d.id)">
                 合并到此
               </n-button>
             </div>
           </div>
-          <div v-else class="td-s">未发现坐标相近的已发布钓点</div>
+          <div v-else class="td-s">未发现 100 米以内的有效已发布钓点</div>
 
           <div class="rv-title">审核备注</div>
           <n-input
@@ -619,8 +625,12 @@ onMounted(load)
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 12px;
-  border: 1px solid var(--c-line);
+  padding: 10px 12px;
+  border: 1px solid #F0B429;
+  border-left: 4px solid #E5484D;
   border-radius: 8px;
+  background: #FFF4E5;
 }
+.rv-dup .td-sub { display: flex; flex-direction: column; gap: 3px; }
+.rv-dup .td-t { color: #B42318; font-weight: 700; }
 </style>

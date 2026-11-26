@@ -13,6 +13,7 @@
  */
 import {
   ArchiveOutline,
+  AnalyticsOutline,
   BagHandleOutline,
   CartOutline,
   ChatbubbleEllipsesOutline,
@@ -77,6 +78,7 @@ const menuGroups: MenuGroup[] = [
       { key: 'users', label: '用户管理', icon: PeopleOutline, path: '/users' },
       { key: 'plans', label: '会员套餐', icon: RibbonOutline, path: '/plans' },
       { key: 'goods', label: '积分商城', icon: BagHandleOutline, path: '/goods' },
+      { key: 'points', label: '积分管理', icon: AnalyticsOutline, path: '/points' },
       { key: 'orders', label: '订单管理', icon: CartOutline, path: '/orders' },
       { key: 'weather', label: '天气数据', icon: CloudOutline, path: '/weather' },
       { key: 'spots', label: '钓点管理', icon: LocationOutline, path: '/spots' },
