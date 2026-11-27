@@ -11,6 +11,7 @@
  * - 订单号参与 URL 时统一使用 encodeURIComponent，避免特殊字符破坏路径。
  */
 import http from './http'
+import { apiUrl } from '@/config/env'
 
 // ---------- 类型 ----------
 
@@ -1318,7 +1319,7 @@ export const api = {
     Object.entries(params || {}).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
     })
-    return `/api/admin/points/export${qs.toString() ? '?' + qs.toString() : ''}`
+    return apiUrl(`/admin/points/export${qs.toString() ? '?' + qs.toString() : ''}`)
   },
 
   // ---------- 行为分析 ----------

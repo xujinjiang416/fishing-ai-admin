@@ -3,7 +3,7 @@
  *
  * 职责：
  * 1. 创建 baseURL 为 `/api`、超时 30s 的 Axios 实例；
- * 2. 请求拦截器自动注入 Bearer Token；
+ * 2. 请求拦截器自动注入 Bearer Token（未配置环境时直接报错）；
  * 3. 响应拦截器统一解包后端 `{ code, data, msg }` 协议，只把 data 交给业务层；
  * 4. 401 时清理本地登录态并跳转登录页。
  *
@@ -15,6 +15,7 @@
  */
 import axios from 'axios'
 import { createDiscreteApi } from 'naive-ui'
+import { appConfig, isConfigured } from '@/config/env'
 
 // 独立 API 实例：在组件外（拦截器中）也能调用 message 提示
 const { message } = createDiscreteApi(['message'])
@@ -37,13 +38,16 @@ export const TOKEN_KEY = 'fishai_admin_token'
 /** localStorage 键：当前管理员信息（AdminInfo 的 JSON 字符串） */
 export const ADMIN_KEY = 'fishai_admin_info'
 
-// Axios 实例：默认相对路径 /api（同源部署）；
-// 静态托管 + 云托管分离部署时，用 VITE_API_BASE 注入云托管公网地址（含 /api）
-const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) || '/api'
-const http = axios.create({ baseURL: API_BASE, timeout: 30000 })
+// Axios 实例：baseURL 由 src/config/env.ts 按构建模式自动选择；
+// 生产环境地址未配置时，请求拦截器会直接给出明确错误。
+const API_BASE = appConfig.apiBase
+const http = axios.create({ baseURL: API_BASE || '/', timeout: 30000 })
 
-// 请求拦截：存在本地 token 时统一附加 Authorization 头
+// 请求拦截：未配置环境直接失败；存在本地 token 时统一附加 Authorization 头
 http.interceptors.request.use((config) => {
+  if (!isConfigured) {
+    return Promise.reject(new Error(`${appConfig.name}尚未配置 API 地址，请先填写 src/config/env.ts`))
+  }
   const token = localStorage.getItem(TOKEN_KEY)
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config

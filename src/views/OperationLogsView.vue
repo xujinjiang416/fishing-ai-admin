@@ -6,7 +6,7 @@
  * - 分页展示管理后台的关键操作日志（积分配置变更 / 评论删除 / 评论批量删除）；
  * - 支持按动作类型与关键词（详情 / 管理员 / 对象）检索，满足审计追溯。
  *
- * 接口来源：`@/api/admin` 的 api.logs；导出直接请求 `/api/admin/logs/export`
+ * 接口来源：`@/api/admin` 的 api.logs；导出使用 env.ts 的完整 API 地址请求 `/admin/logs/export`
  * （需手动携带 Bearer Token，返回 CSV Blob）。
  *
  * 关键交互：关键词输入 300ms 防抖；动作下拉变更立即回到第 1 页查询。
@@ -18,6 +18,7 @@ import { h, onMounted, reactive, ref } from 'vue'
 
 import { api, type OperationLogItem } from '@/api/admin'
 import { TOKEN_KEY } from '@/api/http'
+import { apiUrl } from '@/config/env'
 
 /** 单行省略文本：超宽时截断为一行 + 悬浮显示全文（n-ellipsis） */
 function ellipsis(text: string) {
@@ -82,7 +83,7 @@ async function doExport() {
   if (query.keyword) params.set('keyword', query.keyword)
   if (query.action && query.action !== 'all') params.set('action', query.action)
   const token = localStorage.getItem(TOKEN_KEY)
-  const resp = await fetch(`/api/admin/logs/export?${params.toString()}`, {
+  const resp = await fetch(apiUrl(`/admin/logs/export?${params.toString()}`), {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!resp.ok) {

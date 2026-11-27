@@ -12,7 +12,7 @@
  * 接口来源：`@/api/admin` 的 api.orders / api.orderStats / api.orderDetail /
  * api.closeOrder / api.shipOrder / api.updateOrderAddress / api.remarkOrder /
  * api.refundOrder / api.completeOrder / api.deleteOrder，导出直接请求
- * `/api/admin/orders/export`（需手动携带 Bearer Token）。
+ * `/api/admin/orders/export`（需手动携带 Bearer Token）
  *
  * 关键交互：关键词输入 300ms 防抖；筛选变更回到第 1 页；行点击打开详情抽屉；
  * 所有写操作成功后统一刷新列表、统计与当前详情。
@@ -48,6 +48,7 @@ import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import { api, type AdminOrder, type AdminOrderDetail, type OrderQuery, type OrderStats } from '@/api/admin'
 import { TOKEN_KEY } from '@/api/http'
 import BaseChart from '@/components/BaseChart.vue'
+import { apiUrl } from '@/config/env'
 import { useAuthStore } from '@/stores/auth'
 import { initLineBarChartOption } from '@/utils/chart/initOptionUtils'
 import { money, orderStatusTag, payStatusTag } from '@/utils/tags'
@@ -962,7 +963,7 @@ async function doExport() {
     })
     params.set('fields', exportFields.value.join(','))
     const token = localStorage.getItem(TOKEN_KEY) || ''
-    const res = await fetch(`/api/admin/orders/export?${params.toString()}`, {
+    const res = await fetch(apiUrl(`/admin/orders/export?${params.toString()}`), {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) throw new Error('export failed')
