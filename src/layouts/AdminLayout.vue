@@ -80,6 +80,7 @@ const menuGroups: MenuGroup[] = [
       { key: 'goods', label: '积分商城', icon: BagHandleOutline, path: '/goods' },
       { key: 'points', label: '积分管理', icon: AnalyticsOutline, path: '/points' },
       { key: 'orders', label: '订单管理', icon: CartOutline, path: '/orders' },
+      { key: 'refunds', label: '退款申请', icon: ReceiptOutline, path: '/refunds' },
       { key: 'weather', label: '天气数据', icon: CloudOutline, path: '/weather' },
       { key: 'spots', label: '钓点管理', icon: LocationOutline, path: '/spots' },
       { key: 'reviews', label: '钓点审核', icon: CheckmarkDoneOutline, path: '/reviews' },

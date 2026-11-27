@@ -826,6 +826,28 @@ export interface AdminOrder {
   closedAt: string
 }
 
+/** 用户退款申请（含完整关联订单与用户信息） */
+export interface RefundRequestItem {
+  requestNo: string
+  orderNo: string
+  reason: string
+  images: string[]
+  status: 'pending' | 'approved' | 'rejected'
+  reviewNote: string
+  reviewerId: number | null
+  requestedAt: string
+  reviewedAt: string
+  canReview: boolean
+  order: AdminOrder
+  user: {
+    id: number
+    uid: string
+    username: string
+    nickname: string
+    phone: string
+  }
+}
+
 /** 订单操作日志条目（详情页时间线） */
 export interface OrderLogItem {
   /** 操作动作名称 */
@@ -1436,6 +1458,12 @@ export const api = {
    */
   batchDeleteFishCache: (ids: number[]) =>
     post<{ deleted: number }>('/admin/cache/fish/batch-delete', { ids }),
+
+  // ---------- 运营管理 · 退款申请 ----------
+  refundRequests: (params: { status?: string; keyword?: string; page: number; pageSize: number }) =>
+    get<Page<RefundRequestItem>>('/admin/refund-requests', { ...params }),
+  refundRequestDetail: (requestNo: string) =>
+    get<RefundRequestItem>(`/admin/refund-requests/${encodeURIComponent(requestNo)}`),
 
   // ---------- 运营管理 · 订单管理 ----------
   /**

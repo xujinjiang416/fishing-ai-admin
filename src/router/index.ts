@@ -66,6 +66,11 @@ const router = createRouter({
           meta: { title: '订单管理' },
         },
         {
+          path: 'refunds',
+          component: () => import('@/views/RefundRequestsView.vue'),
+          meta: { title: '退款申请' },
+        },
+        {
           path: 'weather',
           component: () => import('@/views/WeatherLogsView.vue'),
           meta: { title: '天气数据' },

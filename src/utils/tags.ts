@@ -161,6 +161,8 @@ export function orderStatusTag(s: string | null | undefined): TagStyle {
       return { text: '已关闭', ...T.mute }
     case '退款中':
       return { text: '退款中', ...T.accent }
+    case '待退款审核':
+      return { text: '待退款审核', ...T.accent }
     case '部分退款':
       return { text: '部分退款', ...T.gold }
     case '已退款':

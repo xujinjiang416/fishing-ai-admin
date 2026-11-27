@@ -131,6 +131,7 @@ const statusOptions = [
   { label: '已完成', value: '已完成' },
   { label: '已关闭', value: '已关闭' },
   { label: '退款中', value: '退款中' },
+  { label: '待退款审核', value: '待退款审核' },
   { label: '部分退款', value: '部分退款' },
   { label: '已退款', value: '已退款' },
 ]
