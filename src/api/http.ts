@@ -37,8 +37,10 @@ export const TOKEN_KEY = 'fishai_admin_token'
 /** localStorage 键：当前管理员信息（AdminInfo 的 JSON 字符串） */
 export const ADMIN_KEY = 'fishai_admin_info'
 
-// Axios 实例：相对路径 /api，开发期由 Vite proxy 转发到后端
-const http = axios.create({ baseURL: '/api', timeout: 30000 })
+// Axios 实例：默认相对路径 /api（同源部署）；
+// 静态托管 + 云托管分离部署时，用 VITE_API_BASE 注入云托管公网地址（含 /api）
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) || '/api'
+const http = axios.create({ baseURL: API_BASE, timeout: 30000 })
 
 // 请求拦截：存在本地 token 时统一附加 Authorization 头
 http.interceptors.request.use((config) => {
@@ -68,13 +70,13 @@ http.interceptors.response.use(
       (err.code === 'ECONNABORTED' ? '请求超时' : '') ||
       err.message ||
       '网络错误'
-    // 未授权：清理本地登录态并跳转登录页（已处于登录页则不再重复提示）
+    // 未授权：清理本地登录态并跳转登录页（hash 路由，避免静态托管刷新 404）
     if (status === 401) {
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem(ADMIN_KEY)
-      if (!location.pathname.startsWith('/login')) {
+      if (!location.hash.startsWith('#/login')) {
         message.error('登录已过期，请重新登录')
-        setTimeout(() => (location.href = '/login'), 600)
+        setTimeout(() => (location.hash = '#/login'), 600)
       }
     } else {
       message.error(msg)

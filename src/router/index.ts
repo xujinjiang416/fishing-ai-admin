@@ -14,13 +14,13 @@
  * - 布局子路由使用相对路径（不带前导斜杠），最终路径为父级 `/` + 子路径；
  * - 未匹配路径统一重定向到 `/`，再由 `/` 重定向到 `/dashboard`。
  */
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 
 import { TOKEN_KEY } from '@/api/http'
 
-// 路由实例：history 模式 + 二级路由结构
+// 路由实例：hash 模式，静态托管无需服务端 fallback，刷新任意页面都不会 404
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes: [
     {
       path: '/login',
